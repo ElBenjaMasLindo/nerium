@@ -10,9 +10,11 @@ import type { HttpRequest, RawHttpResponse, RawStreamEvent } from './http-wire.j
 export type ConnectionRuntimeConfig = {
   baseURL: string;
   extraHeaders: Readonly<Record<string, string>>;
+  stream: boolean;
 };
 
 export type Codec = {
+  provider: string;
   buildRequest: (request: ChatRequest, config: ConnectionRuntimeConfig) => Result<HttpRequest, NeriumError>;
   parseResponse: (raw: RawHttpResponse) => Result<ChatResponse, NeriumError>;
   parseChunk: (event: RawStreamEvent) => Result<Option<ChatChunk>, NeriumError>;
