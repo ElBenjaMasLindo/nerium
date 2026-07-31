@@ -113,8 +113,15 @@ const finalizeChat = async (ctx: ConnCtx, request: ChatRequest, authed: HttpRequ
   const sent = await send(authed, request.signal);
   if (!sent.ok) return err(withProvider(ctx, sent.error));
   if (!isOkStatus(sent.value.status)) return err(ctx.codec.parseError(sent.value));
-  return ctx.codec.parseResponse(sent.value);
+  const parsed = ctx.codec.parseResponse(sent.value);
+  if (!parsed.ok) return err(parsed.error);
+  return ok(withRespondedModel(parsed.value, request.model));
 };
+
+// Some providers (e.g. Gemini) do not echo the served model in the response body.
+// The connection knows the requested model; fill it in only when the codec could not.
+const withRespondedModel = (response: ChatResponse, requested: ModelId): ChatResponse =>
+  String(response.model) === '' ? { ...response, model: requested } : response;
 
 const runChat = async (ctx: ConnCtx, request: ChatRequest): Promise<Result<ChatResponse, NeriumError>> => {
   const local = validateLocally(ctx, request);
