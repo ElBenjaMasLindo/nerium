@@ -24,3 +24,5 @@ export type ContentBlockDelta =
   | { type: 'tool_call'; argumentsFragment: string }
   | { type: 'reasoning'; text: string }
   | { type: 'opaque'; raw: unknown };
+
+export type ToolResult = { toolCallId: ToolCallId; result: Record<string, unknown> };
