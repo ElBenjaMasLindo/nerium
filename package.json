@@ -1,7 +1,7 @@
 {
   "name": "nerium",
-  "description": "xxx",
-  "keywords": ["xxx"],
+  "description": "Provider-agnostic. Infrastructure-agnostic. Runtime-agnostic. Zero deps for llms calls.",
+  "keywords": ["llm", "language-model", "sdk", "typescript", "provider-agnostic", "multi-provider", "zero-dependencies", "chat", "streaming", "tool-calling"],
   "version": "0.1.0",
   "license": "MPL-2.0",
   "type": "module",
@@ -12,9 +12,9 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "types": "./dist/index.d.ts",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "files": [
     "dist"
   ],
@@ -24,7 +24,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "tsup",
-    "prepublishOnly": "npm build",
+    "prepublishOnly": "npm run build",
     "gate": "eslint . && tsc --noEmit",
     "prepare": "husky"
   },
