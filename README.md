@@ -184,3 +184,8 @@ SemVer. `0.x` allows breaking changes in `MINOR` (additions to discriminated uni
 ## License
 
 [Mozilla Public License 2.0](https://mozilla.org/MPL/2.0/) — behaves like MIT when you `npm install` and use it as-is: no copyleft obligation on your code. Only applies if you modify nerium's own source files. See [LICENSE](LICENSE) for full terms.
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and pull request guidelines.
+
