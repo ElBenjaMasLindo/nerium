@@ -1,7 +1,5 @@
 # Nerium
 
-> Provider-agnostic. Runtime-agnostic. Infrastructure-agnostic. Zero deps.
-
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://mozilla.org/MPL/2.0/)
 [![npm version](https://img.shields.io/npm/v/nerium-sdk.svg)](https://www.npmjs.com/package/nerium-sdk)
 [![CI](https://github.com/ElBenjaMasLindo/nerium/actions/workflows/ci.yml/badge.svg)](https://github.com/ElBenjaMasLindo/nerium/actions/workflows/ci.yml)

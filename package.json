@@ -1,7 +1,7 @@
 {
   "name": "nerium-sdk",
   "description": "Provider-agnostic. Infrastructure-agnostic. Runtime-agnostic. Zero deps for llms calls.",
-  "keywords": ["llm", "language-model", "sdk", "typescript", "provider-agnostic", "multi-provider", "zero-dependencies", "chat", "streaming", "tool-calling"],
+  "keywords": ["llm", "sdk", "typescript", "provider-agnostic", "multi-provider", "zero-dependencies", "chat", "streaming", "tool-calling"],
   "version": "0.1.0",
   "license": "MPL-2.0",
   "type": "module",
