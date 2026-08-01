@@ -3,7 +3,7 @@
 > Provider-agnostic. Runtime-agnostic. Infrastructure-agnostic. Zero deps.
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://mozilla.org/MPL/2.0/)
-[![npm version](https://img.shields.io/npm/v/nerium.svg)](https://www.npmjs.com/package/nerium)
+[![npm version](https://img.shields.io/npm/v/nerium-sdk.svg)](https://www.npmjs.com/package/nerium-sdk)
 [![CI](https://github.com/ElBenjaMasLindo/nerium/actions/workflows/ci.yml/badge.svg)](https://github.com/ElBenjaMasLindo/nerium/actions/workflows/ci.yml)
 
 Nerium is a TypeScript SDK that talks to language models without tying you to a provider, a runtime, or a piece of infrastructure. It runs in Node, Deno, Bun, Workers, edge — anywhere fetch exists. It has zero runtime dependencies. It does not require a gateway, a service, or any companion package.
@@ -13,9 +13,9 @@ Small enough to fit in one agent skill. Give an LLM the full API surface in a si
 ## Install
 
 ```bash
-npm install nerium
+npm install nerium-sdk
 # or
-pnpm add nerium
+pnpm add nerium-sdk
 ```
 
 Requires Node.js 20+ (LTS) or any runtime with `fetch`. Targets TypeScript 5.x.
@@ -28,7 +28,7 @@ import {
   openaiCodec,
   some, none, toModelId,
   type CreateConnectionInput, type ChatRequest,
-} from 'nerium';
+} from 'nerium-sdk';
 
 const input: CreateConnectionInput = {
   codec: openaiCodec,
@@ -94,7 +94,7 @@ console.log(text?.type === 'text' ? text.text : '<no text>');
 ### Multiple providers via a typed client
 
 ```ts
-import { createClient, openaiCodec, anthropicCodec, geminiCodec } from 'nerium';
+import { createClient, openaiCodec, anthropicCodec, geminiCodec } from 'nerium-sdk';
 
 const client = createClient({
   openaiCompatible: openaiConnection,
@@ -121,7 +121,7 @@ Three chunk types: `start`, `delta`, `end`. The three events that make up any st
 ### Fallback between providers
 
 ```ts
-import { composeFallback, toPublicConnection } from 'nerium';
+import { composeFallback, toPublicConnection } from 'nerium-sdk';
 
 const resilient = toPublicConnection(
   composeFallback([openaiPipeline, anthropicPipeline, geminiPipeline]),
@@ -163,7 +163,7 @@ import {
   some, none, toModelId, toToolCallId,
   type ChatRequest, type ChatResponse, type ChatChunk,
   type NeriumError, type Capabilities,
-} from 'nerium';
+} from 'nerium-sdk';
 ```
 
 - `createConnection(input)` — returns `Promise<Result<Pipeline, NeriumError>>`.
