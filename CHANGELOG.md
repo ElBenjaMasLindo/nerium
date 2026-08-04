@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Agent Skill (`docs/SKILL.md`)**: Added the document that should have existed since Day 1 for an SDK explicitly built for AI agents.
+- **Agent Instructions (`AGENTS.md`)**: Added repository execution guidelines, pre-flight reading requirements, and quality protocol for AI agents.
 
 ## [0.1.0] - 2026-08-01
 
