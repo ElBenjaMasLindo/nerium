@@ -185,17 +185,6 @@ export const parseChunk = (event: RawStreamEvent): Result<Option<ChatChunk>, Ner
   return ok(toChunk(choice, body.value));
 };
 
-const errorCodeField = (error: Record<string, unknown>): string =>
-  isString(error['code']) ? error['code'] : (isString(error['type']) ? error['type'] : 'unknown');
-
-const extractErrorFields = (raw: string): { code: string; message: string } => {
-  const body = parseBodyObject(raw);
-  if (!body.some) return { code: 'unknown', message: raw };
-  const error = body.value['error'];
-  if (!isRecord(error)) return { code: 'unknown', message: raw };
-  return { code: errorCodeField(error), message: isString(error['message']) ? error['message'] : raw };
-};
-
 const refineCategory = (raw: RawHttpResponse): ErrorCategory => {
   const body = parseBodyObject(raw.body);
   if (!body.some) return categorizeByStatus(raw.status);
@@ -205,6 +194,9 @@ const refineCategory = (raw: RawHttpResponse): ErrorCategory => {
 };
 
 export const parseError = (raw: RawHttpResponse): NeriumError => {
-  const { code, message } = extractErrorFields(raw.body);
+  const body = parseBodyObject(raw.body);
+  const errRecord: Record<string, unknown> = body.some && isRecord(body.value['error']) ? body.value['error'] : {};
+  const code = isString(errRecord['code']) ? errRecord['code'] : isString(errRecord['type']) ? errRecord['type'] : 'unknown';
+  const message = isString(errRecord['message']) ? errRecord['message'] : raw.body;
   return { category: refineCategory(raw), code, provider, status: some(raw.status), message, raw: raw.body };
 };

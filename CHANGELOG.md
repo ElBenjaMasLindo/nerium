@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Codec Organization**: Reorganized provider codecs (`anthropic`, `gemini`, `openai`) into dedicated subdirectories under `src/codecs/`.
 - **OpenAI Codec Refactor**: Eliminated seven duplicate tool-call helper functions in `openai/parse.ts` (`fnOf`, `nameOf`, `argsOf`, `nameFromFunction`, `argsFromFunction`, `nameOfStringRecord`, `argsOfStringRecord`) and replaced with two direct accessors (`fnName`, `fnArgs`).
+- **OpenAI Error Parsing**: Inlined `errorCodeField` and `extractErrorFields` into `parseError` to match the Anthropic and Gemini pattern.
 
 ## [0.1.0] - 2026-08-01
 
