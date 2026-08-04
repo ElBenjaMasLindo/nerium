@@ -85,28 +85,16 @@ const appendContent = (blocks: ContentBlock[], raw: unknown): void => {
   else if (Array.isArray(raw)) for (const part of raw) pushPart(blocks, part);
 };
 
-const fnOf = (record: Record<string, unknown>): Option<Record<string, unknown>> =>
-  isRecord(record['function']) ? some(record['function']) : none;
-
-const nameOf = (fn: Option<Record<string, unknown>>): string =>
-  fn.some && isString(fn.value['name']) ? fn.value['name'] : '';
-
-const argsOf = (fn: Option<Record<string, unknown>>): string =>
-  fn.some && isString(fn.value['arguments']) ? fn.value['arguments'] : '';
-
-const nameFromFunction = (record: Record<string, unknown>): string => nameOf(fnOf(record));
-const argsFromFunction = (record: Record<string, unknown>): string => argsOf(fnOf(record));
+const fnName = (fn: Record<string, unknown>): string => (isString(fn['name']) ? fn['name'] : '');
+const fnArgs = (fn: Record<string, unknown>): string => (isString(fn['arguments']) ? fn['arguments'] : '');
 
 const pushToolCall = (blocks: ContentBlock[], call: unknown): void => {
   if (!isRecord(call)) return;
   const id = call['id'];
   const fn = call['function'];
   if (!isString(id) || !isRecord(fn)) return;
-  blocks.push({ type: 'tool_call', id: toToolCallId(id), name: nameOfStringRecord(fn), arguments: parsedArgs(argsOfStringRecord(fn)), providerOptions: none });
+  blocks.push({ type: 'tool_call', id: toToolCallId(id), name: fnName(fn), arguments: parsedArgs(fnArgs(fn)), providerOptions: none });
 };
-
-const nameOfStringRecord = (fn: Record<string, unknown>): string => (isString(fn['name']) ? fn['name'] : '');
-const argsOfStringRecord = (fn: Record<string, unknown>): string => (isString(fn['arguments']) ? fn['arguments'] : '');
 
 const messageToBlocks = (message: Record<string, unknown>): ContentBlock[] => {
   const blocks: ContentBlock[] = [];
@@ -162,8 +150,9 @@ const firstToolCall = (raw: unknown): Option<Record<string, unknown>> => {
 const toolCallChunk = (tc: Record<string, unknown>): Option<ChatChunk> => {
   const index = isNumber(tc['index']) ? tc['index'] : 0;
   const id = tc['id'];
-  if (isString(id)) return some({ type: 'start', index, block: { type: 'tool_call', id: toToolCallId(id), name: nameFromFunction(tc) } });
-  return some({ type: 'delta', index, delta: { type: 'tool_call', argumentsFragment: argsFromFunction(tc) } });
+  const fn = isRecord(tc['function']) ? tc['function'] : {};
+  if (isString(id)) return some({ type: 'start', index, block: { type: 'tool_call', id: toToolCallId(id), name: fnName(fn) } });
+  return some({ type: 'delta', index, delta: { type: 'tool_call', argumentsFragment: fnArgs(fn) } });
 };
 
 const finishChunk = (choice: Record<string, unknown>, body: Record<string, unknown>): Option<ChatChunk> => {
