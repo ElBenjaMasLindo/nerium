@@ -63,8 +63,10 @@ const pushText = (blocks: ContentBlock[], text: string): void => {
   if (text !== '') blocks.push({ type: 'text', text, providerOptions: none });
 };
 
-const pushThinking = (blocks: ContentBlock[], text: string): void => {
-  if (text !== '') blocks.push({ type: 'reasoning', text, providerOptions: none });
+const pushThinking = (blocks: ContentBlock[], block: Record<string, unknown>): void => {
+  const text = isString(block['thinking']) ? block['thinking'] : '';
+  const signature = isString(block['signature']) ? some(block['signature']) : none;
+  if (text !== '' || signature.some) blocks.push({ type: 'reasoning', text, signature, providerOptions: none });
 };
 
 const pushImage = (blocks: ContentBlock[], block: Record<string, unknown>): void => {
@@ -81,7 +83,7 @@ const pushContentBlock = (blocks: ContentBlock[], block: unknown): void => {
   const type = block['type'];
   match(type)
     .with('text', () => { if (isString(block['text'])) pushText(blocks, block['text']); })
-    .with('thinking', () => { if (isString(block['thinking'])) pushThinking(blocks, block['thinking']); })
+    .with('thinking', () => pushThinking(blocks, block))
     .with('tool_use', () => pushToolUse(blocks, block))
     .with('tool_result', () => pushToolResult(blocks, block))
     .with('image', () => pushImage(blocks, block))
@@ -119,7 +121,7 @@ const startBlock = (type: Record<string, unknown>, data: string): Result<Content
   const blockType = type['type'];
   return match(blockType)
     .with('text', () => ok({ type: 'text' }) as Result<ContentBlockStart, NeriumError>)
-    .with('thinking', () => ok({ type: 'reasoning' }) as Result<ContentBlockStart, NeriumError>)
+    .with('thinking', () => ok({ type: 'reasoning', signature: isString(type['signature']) ? some(type['signature']) : none }) as Result<ContentBlockStart, NeriumError>)
     .with('tool_use', () => {
       const id = type['id'];
       const name = type['name'];
@@ -145,7 +147,8 @@ const deltaPayload = (delta: Record<string, unknown>, index: number): Option<Cha
   const t = delta['type'];
   const text = match(t)
     .with('text_delta', () => isString(delta['text']) ? some({ type: 'delta', index, delta: { type: 'text', text: delta['text'] } }) : none)
-    .with('thinking_delta', () => isString(delta['thinking']) ? some({ type: 'delta', index, delta: { type: 'reasoning', text: delta['thinking'] } }) : none)
+    .with('thinking_delta', () => isString(delta['thinking']) ? some({ type: 'delta', index, delta: { type: 'reasoning', text: delta['thinking'], signature: none } }) : none)
+    .with('signature_delta', () => isString(delta['signature']) ? some({ type: 'delta', index, delta: { type: 'reasoning', text: '', signature: some(delta['signature']) } }) : none)
     .with('input_json_delta', () => isString(delta['partial_json']) ? some({ type: 'delta', index, delta: { type: 'tool_call', argumentsFragment: delta['partial_json'] } }) : none)
     // sadist-exception: NERIUM-1 provider delta type is an open vocabulary.
     .otherwise(() => none) as Option<ChatChunk>;
@@ -172,6 +175,13 @@ const endUsage = (data: string): { usage: TokenUsage; finishReason: FinishReason
   };
 };
 
+const handleMessageStart = (data: string): StreamOptions => {
+  const body = parseBodyObject(data);
+  if (!body.some || !isRecord(body.value['message'])) return ok(none);
+  const usage = body.value['message']['usage'];
+  return isRecord(usage) ? ok(some({ type: 'usage', usage: mapUsage(usage) })) : ok(none);
+};
+
 const handleMessageDelta = (data: string): StreamOptions =>
   ok(some({ type: 'end', ...endUsage(data) }));
 
@@ -179,6 +189,7 @@ const namedHandler = (name: Option<string>, data: string): StreamOptions =>
   match(name)
     .with({ some: true, value: 'content_block_start' }, () => handleStart(data))
     .with({ some: true, value: 'content_block_delta' }, () => handleDelta(data))
+    .with({ some: true, value: 'message_start' }, () => handleMessageStart(data))
     .with({ some: true, value: 'message_delta' }, () => handleMessageDelta(data))
     // sadist-exception: NERIUM-1 SSE event names are an open provider vocabulary — not exhaustively enumerable.
     .otherwise(() => ok(none));

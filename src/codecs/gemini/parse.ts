@@ -50,8 +50,11 @@ const pushText = (blocks: ContentBlock[], text: string): void => {
   if (text !== '') blocks.push({ type: 'text', text, providerOptions: none });
 };
 
-const pushThought = (blocks: ContentBlock[], text: string): void => {
-  if (text !== '') blocks.push({ type: 'reasoning', text, providerOptions: none });
+const thoughtSignature = (part: Record<string, unknown>): Option<string> =>
+  isString(part['thoughtSignature']) ? some(part['thoughtSignature']) : none;
+
+const pushThought = (blocks: ContentBlock[], text: string, signature: Option<string>): void => {
+  if (text !== '' || signature.some) blocks.push({ type: 'reasoning', text, signature, providerOptions: none });
 };
 
 const pushMedia = (blocks: ContentBlock[], part: Record<string, unknown>): void => {
@@ -69,19 +72,22 @@ const nameOrEmpty = (fc: Record<string, unknown>): string =>
 const argsOrEmpty = (fc: Record<string, unknown>): Record<string, unknown> =>
   isRecord(fc['args']) ? fc['args'] : {};
 
+const functionCallId = (fc: Record<string, unknown>): string =>
+  isString(fc['id']) ? fc['id'] : nameOrEmpty(fc);
+
 const pushFunctionCall = (blocks: ContentBlock[], part: Record<string, unknown>): void => {
   const fc = part['functionCall'];
   if (!isRecord(fc)) return;
   const name = nameOrEmpty(fc);
-  // Mint the call id from the name so a later tool_result can recover it (Gemini has no ids).
-  blocks.push({ type: 'tool_call', id: toToolCallId(name), name, arguments: argsOrEmpty(fc), providerOptions: none });
+  // Prefer the wire id when present; otherwise fall back to the function name so a later tool_result can recover it.
+  blocks.push({ type: 'tool_call', id: toToolCallId(functionCallId(fc)), name, arguments: argsOrEmpty(fc), providerOptions: none });
 };
 
 const pushPart = (blocks: ContentBlock[], part: unknown): void => {
   if (!isRecord(part)) return;
   if (isString(part['text'])) {
     const isThought = part['thought'] === true;
-    if (isThought) pushThought(blocks, part['text']);
+    if (isThought) pushThought(blocks, part['text'], thoughtSignature(part));
     else pushText(blocks, part['text']);
     return;
   }
@@ -104,7 +110,7 @@ const candidateBlocks = (body: Record<string, unknown>): ContentBlock[] => {
   return blocks;
 };
 
-const hasFunctionCall = (blocks: ReadonlyArray<ContentBlock>): boolean =>
+const blocksHaveToolCall = (blocks: ReadonlyArray<ContentBlock>): boolean =>
   blocks.some((b) => b.type === 'tool_call');
 
 const candidateFinish = (body: Record<string, unknown>): FinishReason => {
@@ -124,7 +130,7 @@ export const parseResponse = (raw: RawHttpResponse): Result<ChatResponse, Nerium
   const body = parseBodyObject(raw.body);
   if (!body.some) return err(unknownError(raw, 'invalid body'));
   const blocks = candidateBlocks(body.value);
-  const finish = hasFunctionCall(blocks) ? 'tool_call' : candidateFinish(body.value);
+  const finish = blocksHaveToolCall(blocks) ? 'tool_call' : candidateFinish(body.value);
   return {
     ok: true,
     value: {
@@ -152,22 +158,28 @@ const firstPart = (parts: unknown): Option<Record<string, unknown>> => {
 const deltaFromPart = (part: Record<string, unknown>, index: number): Option<ChatChunk> => {
   const text = part['text'];
   const fc = part['functionCall'];
-  if (isString(text) && text !== '') return some({ type: 'delta', index, delta: { type: 'text', text } });
+  const signature = thoughtSignature(part);
+  if (isString(text) && (text !== '' || signature.some)) {
+    const delta = part['thought'] === true
+      ? { type: 'reasoning' as const, text, signature }
+      : { type: 'text' as const, text };
+    return some({ type: 'delta', index, delta });
+  }
   if (isRecord(fc)) return functionCallChunk(fc, index);
   return none;
 };
 
 const functionCallChunk = (fc: Record<string, unknown>, index: number): Option<ChatChunk> => {
   const name = nameOrEmpty(fc);
-  return some({ type: 'start', index, block: { type: 'tool_call', id: toToolCallId(name), name } });
+  return some({ type: 'start', index, block: { type: 'tool_call', id: toToolCallId(functionCallId(fc)), name } });
 };
 
-const endChunk = (body: Record<string, unknown>): Option<ChatChunk> => {
+const endChunk = (body: Record<string, unknown>): Option<{ usage: TokenUsage; finishReason: FinishReason }> => {
   const candidates = body['candidates'];
   if (!Array.isArray(candidates)) return none;
   const first = candidates[0];
   if (!isRecord(first) || !isString(first['finishReason'])) return none;
-  return some({ type: 'end', usage: mapUsage(body['usageMetadata']), finishReason: mapFinishReason(first['finishReason']) });
+  return some({ usage: mapUsage(body['usageMetadata']), finishReason: mapFinishReason(first['finishReason']) });
 };
 
 const candidatePart = (body: Record<string, unknown>): Option<Record<string, unknown>> => {
@@ -180,11 +192,26 @@ const candidatePart = (body: Record<string, unknown>): Option<Record<string, unk
   return firstPart(content['parts']);
 };
 
+const firstCandidateParts = (body: Record<string, unknown>): ReadonlyArray<unknown> => {
+  const candidates = body['candidates'];
+  if (!Array.isArray(candidates)) return [];
+  const first = candidates[0];
+  if (!isRecord(first) || !isRecord(first['content'])) return [];
+  const parts = first['content']['parts'];
+  return Array.isArray(parts) ? parts : [];
+};
+
+const hasFunctionCall = (body: Record<string, unknown>): boolean =>
+  firstCandidateParts(body).some((part) => isRecord(part) && isRecord(part['functionCall']));
+
 const dataChunk = (data: string): StreamOptions => {
   const body = parseBodyObject(data);
   if (!body.some) return err(chunkError({ eventName: none, data }));
   const end = endChunk(body.value);
-  if (end.some) return ok(end);
+  if (end.some) {
+    const finishReason = hasFunctionCall(body.value) ? 'tool_call' : end.value.finishReason;
+    return ok(some({ type: 'end', usage: end.value.usage, finishReason }));
+  }
   const part = candidatePart(body.value);
   if (!part.some) return ok(none);
   return ok(deltaFromPart(part.value, 0));

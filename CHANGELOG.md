@@ -10,15 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Agent Skill (`docs/SKILL.md`)**: Added the document that should have existed since Day 1 for an SDK explicitly built for AI agents.
 - **Agent Instructions (`AGENTS.md`)**: Added repository execution guidelines, pre-flight reading requirements, and quality protocol for AI agents.
+- **OpenAI Chunk Fixtures**: Added 3 fixtures covering additional `finish_reason` mappings (`length` → `max_tokens`, `content_filter` → `filtered`, legacy `function_call` → `tool_call`).
+- **Gemini Chunk Fixtures**: Added 3 fixtures covering additional `finishReason` mappings (`SAFETY` → `filtered`, `MAX_TOKENS` → `max_tokens`) and a discarded chunk without candidates.
 
 ### Changed
 - **Codec Organization**: Reorganized provider codecs (`anthropic`, `gemini`, `openai`) into dedicated subdirectories under `src/codecs/`.
 - **OpenAI Codec Refactor**: Eliminated seven duplicate tool-call helper functions in `openai/parse.ts` (`fnOf`, `nameOf`, `argsOf`, `nameFromFunction`, `argsFromFunction`, `nameOfStringRecord`, `argsOfStringRecord`) and replaced with two direct accessors (`fnName`, `fnArgs`).
 - **OpenAI Error Parsing**: Inlined `errorCodeField` and `extractErrorFields` into `parseError` to match the Anthropic and Gemini pattern.
-
-### Added
-- **OpenAI Chunk Fixtures**: Added 3 fixtures covering additional `finish_reason` mappings (`length` → `max_tokens`, `content_filter` → `filtered`, legacy `function_call` → `tool_call`).
-- **Gemini Chunk Fixtures**: Added 3 fixtures covering additional `finishReason` mappings (`SAFETY` → `filtered`, `MAX_TOKENS` → `max_tokens`) and a discarded chunk without candidates.
+- **Stream Usage**: `collectStream` now preserves Anthropic `message_start` input usage and merges it with the final `message_delta` output usage instead of overwriting it; missing `total` is derived from `input + output`. Added `usage` chunk variant to `ChatChunk` to carry mid-stream token counts.
+- **Reasoning Signatures**: Anthropic and Gemini now preserve `signature` and `thoughtSignature` across streaming and response parsing, including signature-only deltas. `ContentBlock`, `ContentBlockStart`, and `ContentBlockDelta` now carry `signature: Option<string>` on reasoning blocks.
+- **`tool_call` Finish Consistency**: Gemini streaming now forces `finishReason: 'tool_call'` when the same wire event includes a `functionCall` part; `collectStream` applies the same override when accumulated blocks contain a tool call, keeping streaming and non-streaming contracts aligned.
+- **Gemini Function Call IDs**: Gemini now prefers the wire `id` field on `functionCall` parts over the function name for generating stable tool-call identifiers.
 
 ## [0.1.0] - 2026-08-01
 

@@ -61,6 +61,25 @@ describe('collectStream', () => {
     expect(out.usage.cacheWrite).toEqual(some(4));
     expect(out.usage.cacheRead).toEqual(some(6));
   });
+
+  it('merges partial usage from message_start and message_delta', async () => {
+    const out = await collectStream(fromChunks([
+      { type: 'usage', usage: { input: 25, output: 1, total: 26, cacheWrite: none, cacheRead: none } },
+      { type: 'end', usage: { input: 0, output: 15, total: 15, cacheWrite: none, cacheRead: none }, finishReason: 'complete' },
+    ]), ctx);
+    expect(out.usage).toEqual({ input: 25, output: 15, total: 40, cacheWrite: none, cacheRead: none });
+  });
+
+  it('forces tool_call finish when accumulated blocks contain a tool call', async () => {
+    const id = toToolCallId('call_tool');
+    const out = await collectStream(fromChunks([
+      { type: 'start', index: 0, block: { type: 'text' } },
+      { type: 'delta', index: 0, delta: { type: 'text', text: 'hi' } },
+      { type: 'start', index: 1, block: { type: 'tool_call', id, name: 'x' } },
+      { type: 'end', usage, finishReason: 'complete' },
+    ]), ctx);
+    expect(out.finishReason).toBe('tool_call');
+  });
 });
 
 describe('appendAssistantTurn', () => {

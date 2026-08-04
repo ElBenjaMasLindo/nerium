@@ -36,12 +36,12 @@ export const anthropicResponseFixtures: ReadonlyArray<ResponseFixture> = [
   },
   {
     description: 'thinking block maps to reasoning',
-    raw: { status: 200, headers: {}, body: '{"id":"msg_3","model":"claude-3-7-sonnet","content":[{"type":"thinking","thinking":"hmm"},{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":2}}' },
+    raw: { status: 200, headers: {}, body: '{"id":"msg_3","model":"claude-3-7-sonnet","content":[{"type":"thinking","thinking":"hmm","signature":"sig_1"},{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":2}}' },
     expected: {
       ok: true,
       value: {
         content: [
-          { type: 'reasoning', text: 'hmm', providerOptions: none },
+          { type: 'reasoning', text: 'hmm', signature: some('sig_1'), providerOptions: none },
           { type: 'text', text: 'ok', providerOptions: none },
         ],
         finishReason: 'complete',
@@ -87,6 +87,11 @@ export const anthropicChunkFixtures: ReadonlyArray<ChunkFixture> = [
     description: 'content_block_delta input_json_delta',
     raw: { eventName: some('content_block_delta'), data: '{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"city\\""}}' },
     expected: { ok: true, value: some({ type: 'delta', index: 1, delta: { type: 'tool_call', argumentsFragment: '{"city"' } }) },
+  },
+  {
+    description: 'signature_delta preserves thinking signature',
+    raw: { eventName: some('content_block_delta'), data: '{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig_2"}}' },
+    expected: { ok: true, value: some({ type: 'delta', index: 0, delta: { type: 'reasoning', text: '', signature: some('sig_2') } }) },
   },
   {
     description: 'message_delta end with stop_reason',

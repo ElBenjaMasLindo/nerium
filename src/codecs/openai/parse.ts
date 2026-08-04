@@ -99,7 +99,7 @@ const pushToolCall = (blocks: ContentBlock[], call: unknown): void => {
 const messageToBlocks = (message: Record<string, unknown>): ContentBlock[] => {
   const blocks: ContentBlock[] = [];
   const reasoning = message['reasoning_content'];
-  if (isString(reasoning) && reasoning !== '') blocks.push({ type: 'reasoning', text: reasoning, providerOptions: none });
+  if (isString(reasoning) && reasoning !== '') blocks.push({ type: 'reasoning', text: reasoning, signature: none, providerOptions: none });
   appendContent(blocks, message['content']);
   if (Array.isArray(message['tool_calls'])) for (const call of message['tool_calls']) pushToolCall(blocks, call);
   return blocks;

@@ -36,12 +36,12 @@ export const geminiResponseFixtures: ReadonlyArray<ResponseFixture> = [
   },
   {
     description: 'thought part maps to reasoning',
-    raw: { status: 200, headers: {}, body: '{"candidates":[{"content":{"parts":[{"thought":true,"text":"hmm"},{"text":"ok"}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":2,"totalTokenCount":3}}' },
+    raw: { status: 200, headers: {}, body: '{"candidates":[{"content":{"parts":[{"thought":true,"text":"hmm","thoughtSignature":"sig_g"},{"text":"ok"}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":2,"totalTokenCount":3}}' },
     expected: {
       ok: true,
       value: {
         content: [
-          { type: 'reasoning', text: 'hmm', providerOptions: none },
+          { type: 'reasoning', text: 'hmm', signature: some('sig_g'), providerOptions: none },
           { type: 'text', text: 'ok', providerOptions: none },
         ],
         finishReason: 'complete',
@@ -77,6 +77,16 @@ export const geminiChunkFixtures: ReadonlyArray<ChunkFixture> = [
     description: 'functionCall chunk becomes a tool_call start',
     raw: { eventName: none, data: '{"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_weather","args":{"city":"BA"}}}],"role":"model"}}]}' },
     expected: { ok: true, value: some({ type: 'start', index: 0, block: { type: 'tool_call', id: toToolCallId('get_weather'), name: 'get_weather' } }) },
+  },
+  {
+    description: 'functionCall finish maps to tool_call',
+    raw: { eventName: none, data: '{"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_weather","args":{"city":"BA"}}}]},"finishReason":"STOP"}]}' },
+    expected: { ok: true, value: some({ type: 'end', usage: { input: 0, output: 0, total: 0, cacheWrite: none, cacheRead: none }, finishReason: 'tool_call' }) },
+  },
+  {
+    description: 'thought signature survives empty streaming text',
+    raw: { eventName: none, data: '{"candidates":[{"content":{"parts":[{"thought":true,"text":"","thoughtSignature":"sig_empty"}]}}]}' },
+    expected: { ok: true, value: some({ type: 'delta', index: 0, delta: { type: 'reasoning', text: '', signature: some('sig_empty') } }) },
   },
   {
     description: 'end chunk with finishReason',
