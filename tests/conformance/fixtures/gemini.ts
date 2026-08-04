@@ -83,6 +83,21 @@ export const geminiChunkFixtures: ReadonlyArray<ChunkFixture> = [
     raw: { eventName: none, data: '{"candidates":[{"content":{"parts":[{"text":""}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1,"totalTokenCount":2}}' },
     expected: { ok: true, value: some({ type: 'end', usage: { input: 1, output: 1, total: 2, cacheWrite: none, cacheRead: none }, finishReason: 'complete' }) },
   },
+  {
+    description: 'end chunk with finishReason SAFETY maps to filtered',
+    raw: { eventName: none, data: '{"candidates":[{"content":{"parts":[{"text":""}],"role":"model"},"finishReason":"SAFETY"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":0,"totalTokenCount":1}}' },
+    expected: { ok: true, value: some({ type: 'end', usage: { input: 1, output: 0, total: 1, cacheWrite: none, cacheRead: none }, finishReason: 'filtered' }) },
+  },
+  {
+    description: 'end chunk with finishReason MAX_TOKENS maps to max_tokens',
+    raw: { eventName: none, data: '{"candidates":[{"content":{"parts":[{"text":""}],"role":"model"},"finishReason":"MAX_TOKENS"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":2,"totalTokenCount":3}}' },
+    expected: { ok: true, value: some({ type: 'end', usage: { input: 1, output: 2, total: 3, cacheWrite: none, cacheRead: none }, finishReason: 'max_tokens' }) },
+  },
+  {
+    description: 'chunk without candidates is discarded',
+    raw: { eventName: none, data: '{"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":0,"totalTokenCount":1}}' },
+    expected: { ok: true, value: none },
+  },
 ];
 
 export const geminiErrorFixtures: ReadonlyArray<ErrorFixture> = [

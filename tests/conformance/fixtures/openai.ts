@@ -69,6 +69,21 @@ export const openaiChunkFixtures: ReadonlyArray<ChunkFixture> = [
     raw: { eventName: none, data: '{"choices":[],"usage":{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}}' },
     expected: { ok: true, value: none },
   },
+  {
+    description: 'end chunk with finish_reason length maps to max_tokens',
+    raw: { eventName: none, data: '{"choices":[{"index":0,"delta":{},"finish_reason":"length"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}' },
+    expected: { ok: true, value: { some: true, value: { type: 'end', usage: { input: 1, output: 2, total: 3, cacheWrite: none, cacheRead: none }, finishReason: 'max_tokens' } } },
+  },
+  {
+    description: 'end chunk with finish_reason content_filter maps to filtered',
+    raw: { eventName: none, data: '{"choices":[{"index":0,"delta":{},"finish_reason":"content_filter"}],"usage":{"prompt_tokens":1,"completion_tokens":0,"total_tokens":1}}' },
+    expected: { ok: true, value: { some: true, value: { type: 'end', usage: { input: 1, output: 0, total: 1, cacheWrite: none, cacheRead: none }, finishReason: 'filtered' } } },
+  },
+  {
+    description: 'end chunk with legacy finish_reason function_call maps to tool_call',
+    raw: { eventName: none, data: '{"choices":[{"index":0,"delta":{},"finish_reason":"function_call"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}' },
+    expected: { ok: true, value: { some: true, value: { type: 'end', usage: { input: 1, output: 1, total: 2, cacheWrite: none, cacheRead: none }, finishReason: 'tool_call' } } },
+  },
 ];
 
 export const openaiErrorFixtures: ReadonlyArray<ErrorFixture> = [

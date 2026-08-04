@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenAI Codec Refactor**: Eliminated seven duplicate tool-call helper functions in `openai/parse.ts` (`fnOf`, `nameOf`, `argsOf`, `nameFromFunction`, `argsFromFunction`, `nameOfStringRecord`, `argsOfStringRecord`) and replaced with two direct accessors (`fnName`, `fnArgs`).
 - **OpenAI Error Parsing**: Inlined `errorCodeField` and `extractErrorFields` into `parseError` to match the Anthropic and Gemini pattern.
 
+### Added
+- **OpenAI Chunk Fixtures**: Added 3 fixtures covering additional `finish_reason` mappings (`length` → `max_tokens`, `content_filter` → `filtered`, legacy `function_call` → `tool_call`).
+- **Gemini Chunk Fixtures**: Added 3 fixtures covering additional `finishReason` mappings (`SAFETY` → `filtered`, `MAX_TOKENS` → `max_tokens`) and a discarded chunk without candidates.
+
 ## [0.1.0] - 2026-08-01
 
 ### Added
