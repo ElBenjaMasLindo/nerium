@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { openaiCodec } from '../../src/codecs/openai.js';
+import { openaiCodec } from '../../src/codecs/openai/index.js';
 import { none, some } from '../../src/types/option.js';
 import { toModelId } from '../../src/types/branded.js';
 import type { ChatRequest } from '../../src/types/request.js';

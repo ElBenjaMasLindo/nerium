@@ -1,12 +1,12 @@
-import { ok } from '../types/result.js';
-import type { Result } from '../types/result.js';
-import { some, none } from '../types/option.js';
-import type { Codec, ConnectionRuntimeConfig } from '../types/codec.js';
-import type { ChatRequest } from '../types/request.js';
-import type { NeriumError } from '../types/error.js';
-import type { HttpRequest } from '../types/http-wire.js';
-import { splitSystem, buildContents, buildSystemInstruction, buildTools, buildGenerationConfig } from './gemini-wire.js';
-import { parseResponse, parseChunk, parseError } from './gemini-parse.js';
+import { ok } from '../../types/result.js';
+import type { Result } from '../../types/result.js';
+import { some, none } from '../../types/option.js';
+import type { Codec, ConnectionRuntimeConfig } from '../../types/codec.js';
+import type { ChatRequest } from '../../types/request.js';
+import type { NeriumError } from '../../types/error.js';
+import type { HttpRequest } from '../../types/http-wire.js';
+import { splitSystem, buildContents, buildSystemInstruction, buildTools, buildGenerationConfig } from './wire.js';
+import { parseResponse, parseChunk, parseError } from './parse.js';
 
 const joinUrl = (base: string, path: string): string =>
   base.endsWith('/') ? `${base}${path.slice(1)}` : `${base}${path}`;

@@ -1,17 +1,17 @@
 import { match } from 'ts-pattern';
-import { some, none } from '../types/option.js';
-import type { Option } from '../types/option.js';
-import { ok, err } from '../types/result.js';
-import type { Result } from '../types/result.js';
-import type { ContentBlock, ContentBlockStart } from '../types/content.js';
-import type { ChatChunk } from '../types/stream.js';
-import type { ChatResponse, FinishReason, TokenUsage } from '../types/response.js';
-import type { ErrorCategory, NeriumError } from '../types/error.js';
-import type { RawHttpResponse, RawStreamEvent } from '../types/http-wire.js';
-import { categorizeByStatus } from '../core/http-status-category.js';
-import { safeJsonParse } from '../core/safe-json.js';
-import { isRecord, isString, isNumber } from '../core/json-guards.js';
-import { toToolCallId, toModelId } from '../types/branded.js';
+import { some, none } from '../../types/option.js';
+import type { Option } from '../../types/option.js';
+import { ok, err } from '../../types/result.js';
+import type { Result } from '../../types/result.js';
+import type { ContentBlock, ContentBlockStart } from '../../types/content.js';
+import type { ChatChunk } from '../../types/stream.js';
+import type { ChatResponse, FinishReason, TokenUsage } from '../../types/response.js';
+import type { ErrorCategory, NeriumError } from '../../types/error.js';
+import type { RawHttpResponse, RawStreamEvent } from '../../types/http-wire.js';
+import { categorizeByStatus } from '../../core/http-status-category.js';
+import { safeJsonParse } from '../../core/safe-json.js';
+import { isRecord, isString, isNumber } from '../../core/json-guards.js';
+import { toToolCallId, toModelId } from '../../types/branded.js';
 
 const provider = 'anthropic';
 

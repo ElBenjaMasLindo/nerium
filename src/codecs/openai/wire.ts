@@ -1,8 +1,8 @@
-import type { Option } from '../types/option.js';
-import { some, none } from '../types/option.js';
-import type { ToolCallId } from '../types/branded.js';
-import type { Message, SamplingParams, ToolDefinition } from '../types/request.js';
-import type { ContentBlock } from '../types/content.js';
+import type { Option } from '../../types/option.js';
+import { some, none } from '../../types/option.js';
+import type { ToolCallId } from '../../types/branded.js';
+import type { Message, SamplingParams, ToolDefinition } from '../../types/request.js';
+import type { ContentBlock } from '../../types/content.js';
 
 type OpenAiPart =
   | { type: 'text'; text: string }

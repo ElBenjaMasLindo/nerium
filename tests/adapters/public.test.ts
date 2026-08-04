@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createConnection, toPublicConnection, createClient } from '../../src/index.js';
-import { openaiCodec } from '../../src/codecs/openai.js';
+import { openaiCodec } from '../../src/codecs/openai/index.js';
 import { none } from '../../src/types/option.js';
 import { toModelId } from '../../src/types/branded.js';
 import type { Capabilities } from '../../src/types/capabilities.js';

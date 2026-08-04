@@ -1,5 +1,5 @@
 import { runResponseFixtures, runChunkFixtures, runErrorFixtures } from './harness.js';
-import { anthropicCodec } from '../../src/codecs/anthropic.js';
+import { anthropicCodec } from '../../src/codecs/anthropic/index.js';
 import { anthropicResponseFixtures, anthropicChunkFixtures, anthropicErrorFixtures } from './fixtures/anthropic.js';
 
 runResponseFixtures('anthropic', anthropicCodec, anthropicResponseFixtures);

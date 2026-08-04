@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createConnection, toPublicConnection } from '../../src/index.js';
-import { anthropicCodec } from '../../src/codecs/anthropic.js';
+import { anthropicCodec } from '../../src/codecs/anthropic/index.js';
 import { none, some } from '../../src/types/option.js';
 import { toModelId } from '../../src/types/branded.js';
 import type { Capabilities } from '../../src/types/capabilities.js';

@@ -1,9 +1,8 @@
 import { match } from 'ts-pattern';
-import { some, none } from '../types/option.js';
-import type { Option } from '../types/option.js';
-import type { ToolCallId } from '../types/branded.js';
-import type { Message, SamplingParams, ToolDefinition } from '../types/request.js';
-import type { ContentBlock } from '../types/content.js';
+import { some, none } from '../../types/option.js';
+import type { Option } from '../../types/option.js';
+import type { Message, SamplingParams, ToolDefinition } from '../../types/request.js';
+import type { ContentBlock } from '../../types/content.js';
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);

@@ -1,12 +1,12 @@
-import { ok, err } from '../types/result.js';
-import type { Result } from '../types/result.js';
-import { some, none } from '../types/option.js';
-import type { Codec, ConnectionRuntimeConfig } from '../types/codec.js';
-import type { ChatRequest } from '../types/request.js';
-import type { NeriumError } from '../types/error.js';
-import type { HttpRequest } from '../types/http-wire.js';
-import { buildMessages, buildTools, buildSampling } from './openai-wire.js';
-import { parseResponse, parseChunk, parseError } from './openai-parse.js';
+import { ok } from '../../types/result.js';
+import type { Result } from '../../types/result.js';
+import { some, none } from '../../types/option.js';
+import type { Codec, ConnectionRuntimeConfig } from '../../types/codec.js';
+import type { ChatRequest } from '../../types/request.js';
+import type { NeriumError } from '../../types/error.js';
+import type { HttpRequest } from '../../types/http-wire.js';
+import { buildMessages, buildTools, buildSampling } from './wire.js';
+import { parseResponse, parseChunk, parseError } from './parse.js';
 
 const joinUrl = (base: string, path: string): string =>
   base.endsWith('/') ? `${base}${path.slice(1)}` : `${base}${path}`;
