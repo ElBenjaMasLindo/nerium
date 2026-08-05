@@ -1,6 +1,5 @@
-import { match } from 'ts-pattern';
 import { ok, err } from '../types/result.js';
-import { none } from '../types/option.js';
+import { none, some } from '../types/option.js';
 import type { Option } from '../types/option.js';
 import type { Result } from '../types/result.js';
 import type { NeriumError } from '../types/error.js';
@@ -11,12 +10,6 @@ export type StreamedResponse = {
   headers: Readonly<Record<string, string>>;
   body: AsyncIterable<string>;
 };
-
-const valueOrUndefined = <T>(o: Option<T>): T | undefined =>
-  match(o)
-    .with({ some: true }, (v) => v.value)
-    .with({ some: false }, () => undefined)
-    .exhaustive();
 
 const fetchInit = (request: HttpRequest, signal: Option<AbortSignal>): RequestInit => {
   const init: RequestInit = { method: request.method, headers: { ...request.headers } };
@@ -36,8 +29,21 @@ const toNetworkError = (e: unknown): NeriumError => {
     provider: '',
     status: none,
     message: e instanceof Error ? e.message : 'network error',
-    raw: e,
+    raw: some(e),
   };
+};
+
+const flushDecoder = (decoder: TextDecoder): string => decoder.decode();
+
+const readNextChunk = (
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<{ done: boolean; value?: Uint8Array }> => reader.read();
+
+const releaseReader = async (
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<void> => {
+  try { await reader.cancel(); } catch { /* ignore */ }
+  reader.releaseLock();
 };
 
 async function* pumpReader(
@@ -46,14 +52,16 @@ async function* pumpReader(
 ): AsyncGenerator<string> {
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await readNextChunk(reader);
       if (done) break;
       if (value) yield decoder.decode(value, { stream: true });
     }
-    const tail = decoder.decode();
+    const tail = flushDecoder(decoder);
     if (tail) yield tail;
   } catch (e) {
     throw toNetworkError(e);
+  } finally {
+    await releaseReader(reader);
   }
 }
 

@@ -1,4 +1,3 @@
-import { match } from 'ts-pattern';
 import { some, none } from '../types/option.js';
 import type { Option } from '../types/option.js';
 import type { Pipeline, Connection } from '../types/connection.js';
@@ -6,23 +5,25 @@ import type { ModelInfo } from '../types/capabilities.js';
 import type { Result } from '../types/result.js';
 import { publicStream } from './stream.js';
 
-const unwrapList = (result: Result<ReadonlyArray<ModelInfo>, unknown>): ReadonlyArray<ModelInfo> =>
-  match(result)
-    .with({ ok: true }, (r) => r.value)
-    .with({ ok: false }, (r): never => { throw r.error; })
-    .exhaustive();
+const unwrapList = (result: Result<ReadonlyArray<ModelInfo>, unknown>): ReadonlyArray<ModelInfo> => {
+  if (result.ok) return result.value;
+  throw result.error;
+};
 
-const publicListModels = (pipeline: Pipeline): Option<() => Promise<ReadonlyArray<ModelInfo>>> =>
-  match(pipeline.listModels)
-    .with({ some: true }, (l) => some(async () => unwrapList(await l.value())))
-    .with({ some: false }, () => none)
-    .exhaustive();
+const publicListModels = (pipeline: Pipeline): Option<() => Promise<ReadonlyArray<ModelInfo>>> => {
+  if (pipeline.listModels.some) {
+    const listFn = pipeline.listModels.value;
+    return some(async () => unwrapList(await listFn()));
+  }
+  return none;
+};
 
 export const toPublicConnection = (pipeline: Pipeline): Connection => ({
-  chat: async (request) => match(await pipeline.chat(request))
-    .with({ ok: true }, (r) => r.value)
-    .with({ ok: false }, (r): never => { throw r.error; })
-    .exhaustive(),
+  chat: async (request) => {
+    const res = await pipeline.chat(request);
+    if (res.ok) return res.value;
+    throw res.error;
+  },
   stream: publicStream(pipeline),
   capabilitiesForModel: pipeline.capabilitiesForModel,
   listModels: publicListModels(pipeline),

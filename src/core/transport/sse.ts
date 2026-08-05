@@ -18,13 +18,20 @@ const dispatch = (state: SseState): ReadonlyArray<RawStreamEvent> => {
 const processLine = (state: SseState, line: string): ReadonlyArray<RawStreamEvent> => {
   if (line === '') return dispatch(state);
   if (line.startsWith(':')) return EMPTY;
+  if (line === 'data') { state.data.push(''); return EMPTY; }
   if (line.startsWith('data:')) { state.data.push(stripPrefix(line, 5)); return EMPTY; }
   if (line.startsWith('event:')) { state.event = some(stripPrefix(line, 6)); return EMPTY; }
   return EMPTY;
 };
 
 const finalFlush = function* (state: SseState): Generator<RawStreamEvent> {
-  if (state.buffer !== '') yield* processLine(state, state.buffer.replace(/\r$/, ''));
+  if (state.buffer !== '') {
+    const lines = state.buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    for (const line of lines) {
+      yield* processLine(state, line);
+    }
+    state.buffer = '';
+  }
   yield* dispatch(state);
 };
 

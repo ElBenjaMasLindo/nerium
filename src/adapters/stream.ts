@@ -1,4 +1,3 @@
-import { match } from 'ts-pattern';
 import { some } from '../types/option.js';
 import type { Option } from '../types/option.js';
 import type { Pipeline } from '../types/connection.js';
@@ -6,11 +5,10 @@ import type { ChatRequest } from '../types/request.js';
 import type { ChatChunk } from '../types/stream.js';
 import type { Result } from '../types/result.js';
 
-const matchChunk = (result: Result<ChatChunk, unknown>): Option<ChatChunk> =>
-  match(result)
-    .with({ ok: true }, (r) => some(r.value))
-    .with({ ok: false }, (r): never => { throw r.error; })
-    .exhaustive();
+const matchChunk = (result: Result<ChatChunk, unknown>): Option<ChatChunk> => {
+  if (result.ok) return some(result.value);
+  throw result.error;
+};
 
 export const publicStream = (pipeline: Pipeline) =>
   async function* (request: ChatRequest): AsyncGenerator<ChatChunk> {

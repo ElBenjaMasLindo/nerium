@@ -1,8 +1,14 @@
 export const splitLines = (text: string): { lines: string[]; rest: string } => {
-  const parts = text.split('\n');
-  const rest = parts[parts.length - 1] ?? '';
-  const lines = parts.slice(0, -1).map((l) => l.replace(/\r$/, ''));
-  return { lines, rest };
+  let work = text;
+  let trailingCR = false;
+  if (work.endsWith('\r')) {
+    work = work.slice(0, -1);
+    trailingCR = true;
+  }
+  const normalized = work.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const parts = normalized.split('\n');
+  const rest = (parts.pop() ?? '') + (trailingCR ? '\r' : '');
+  return { lines: parts, rest };
 };
 
 export const stripPrefix = (line: string, prefixLength: number): string =>
