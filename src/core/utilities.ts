@@ -1,4 +1,3 @@
-import { match } from 'ts-pattern';
 import { none, some } from '../types/option.js';
 import type { Option } from '../types/option.js';
 import type { ChatChunk } from '../types/stream.js';
@@ -23,38 +22,50 @@ type NumberField = 'input' | 'output';
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const startAcc = (block: ContentBlockStart): Acc =>
-  match(block)
-    .with({ type: 'text' }, () => ({ type: 'text', text: '' }) as Acc)
-    .with({ type: 'media' }, (b) => ({ type: 'media', mimeType: b.mimeType, data: '' }) as Acc)
-    .with({ type: 'tool_call' }, (b) => ({ type: 'tool_call', id: b.id, name: b.name, argumentsBuffer: '' }) as Acc)
-    .with({ type: 'reasoning' }, (b) => ({ type: 'reasoning', text: '', signature: b.signature }) as Acc)
-    .with({ type: 'opaque' }, (b) => ({ type: 'opaque', subtype: b.subtype, raws: [] as unknown[] }) as Acc)
-    .exhaustive();
-
-const applyDelta = (acc: Acc, delta: ContentBlockDelta): void => {
-  match(delta)
-    .with({ type: 'text' }, (d) => { if (acc.type === 'text') acc.text += d.text; })
-    .with({ type: 'media' }, (d) => { if (acc.type === 'media') acc.data += d.data; })
-    .with({ type: 'tool_call' }, (d) => { if (acc.type === 'tool_call') acc.argumentsBuffer += d.argumentsFragment; })
-    .with({ type: 'reasoning' }, (d) => {
-      if (acc.type === 'reasoning') {
-        acc.text += d.text;
-        if (d.signature.some) acc.signature = d.signature;
-      }
-    })
-    .with({ type: 'opaque' }, (d) => { if (acc.type === 'opaque') acc.raws.push(d.raw); })
-    .exhaustive();
+const startAcc = (block: ContentBlockStart): Acc => {
+  switch (block.type) {
+    case 'text': return { type: 'text', text: '' };
+    case 'media': return { type: 'media', mimeType: block.mimeType, data: '' };
+    case 'tool_call': return { type: 'tool_call', id: block.id, name: block.name, argumentsBuffer: '' };
+    case 'reasoning': return { type: 'reasoning', text: '', signature: block.signature };
+    case 'opaque': return { type: 'opaque', subtype: block.subtype, raws: [] };
+  }
 };
 
-const toContentBlock = (acc: Acc): ContentBlock =>
-  match(acc)
-    .with({ type: 'text' }, (a) => ({ type: 'text', text: a.text, providerOptions: none }) as const)
-    .with({ type: 'media' }, (a) => ({ type: 'media', mimeType: a.mimeType, data: a.data, providerOptions: none }) as const)
-    .with({ type: 'tool_call' }, (a) => ({ type: 'tool_call', id: a.id, name: a.name, arguments: parseArgs(a.argumentsBuffer), providerOptions: none }) as const)
-    .with({ type: 'reasoning' }, (a) => ({ type: 'reasoning', text: a.text, signature: a.signature, providerOptions: none }) as const)
-    .with({ type: 'opaque' }, (a) => ({ type: 'opaque', subtype: a.subtype, raw: a.raws, providerOptions: none }) as const)
-    .exhaustive();
+const applyReasoningDelta = (acc: Acc, delta: Extract<ContentBlockDelta, { type: 'reasoning' }>): void => {
+  if (acc.type === 'reasoning') {
+    acc.text += delta.text;
+    if (delta.signature.some) acc.signature = delta.signature;
+  }
+};
+
+const applyTextDelta = (acc: Acc, delta: ContentBlockDelta): boolean => {
+  if (delta.type === 'text' && acc.type === 'text') { acc.text += delta.text; return true; }
+  return false;
+};
+
+const applyContentDelta = (acc: Acc, delta: ContentBlockDelta): boolean => {
+  if (applyTextDelta(acc, delta)) return true;
+  if (delta.type === 'media' && acc.type === 'media') { acc.data += delta.data; return true; }
+  if (delta.type === 'tool_call' && acc.type === 'tool_call') { acc.argumentsBuffer += delta.argumentsFragment; return true; }
+  return false;
+};
+
+const applyDelta = (acc: Acc, delta: ContentBlockDelta): void => {
+  if (applyContentDelta(acc, delta)) return;
+  if (delta.type === 'reasoning') { applyReasoningDelta(acc, delta); return; }
+  if (delta.type === 'opaque' && acc.type === 'opaque') { acc.raws.push(delta.raw); }
+};
+
+const toContentBlock = (acc: Acc): ContentBlock => {
+  switch (acc.type) {
+    case 'text': return { type: 'text', text: acc.text, providerOptions: none };
+    case 'media': return { type: 'media', mimeType: acc.mimeType, data: acc.data, providerOptions: none };
+    case 'tool_call': return { type: 'tool_call', id: acc.id, name: acc.name, arguments: parseArgs(acc.argumentsBuffer), providerOptions: none };
+    case 'reasoning': return { type: 'reasoning', text: acc.text, signature: acc.signature, providerOptions: none };
+    case 'opaque': return { type: 'opaque', subtype: acc.subtype, raw: acc.raws, providerOptions: none };
+  }
+};
 
 const parseArgs = (buffer: string): Record<string, unknown> => {
   const parsed = safeJsonParse(buffer);
@@ -80,14 +91,8 @@ const mergeUsageFields = (base: TokenUsage, incoming: TokenUsage): TokenUsage =>
 };
 
 const resolveEnd = (end: End): { finishReason: FinishReason; usage: TokenUsage } => ({
-  finishReason: match(end)
-    .with({ some: true }, (e) => e.value.finishReason)
-    .with({ some: false }, () => 'unknown' as const)
-    .exhaustive(),
-  usage: match(end)
-    .with({ some: true }, (e) => fillTotal(e.value.usage))
-    .with({ some: false }, () => defaultUsage)
-    .exhaustive(),
+  finishReason: end.some ? end.value.finishReason : 'unknown',
+  usage: end.some ? fillTotal(end.value.usage) : defaultUsage,
 });
 
 const sortedContent = (accs: Map<number, Acc>): ReadonlyArray<ContentBlock> =>
@@ -112,20 +117,20 @@ const assemble = (
   return { content, finishReason, usage, provider: context.provider, model: context.model };
 };
 
+const applyChunkToState = (chunk: ChatChunk, accs: Map<number, Acc>, state: UsageState): void => {
+  if (chunk.type === 'start') { accs.set(chunk.index, startAcc(chunk.block)); return; }
+  if (chunk.type === 'delta') { const a = accs.get(chunk.index); if (a) applyDelta(a, chunk.delta); return; }
+  if (chunk.type === 'end') { state.end = some({ usage: chunk.usage, finishReason: chunk.finishReason }); return; }
+  if (chunk.type === 'usage') { state.usage = some(chunk.usage); }
+};
+
 export const collectStream = async (
   chunks: AsyncIterable<ChatChunk>,
   context: { provider: string; model: ModelId },
 ): Promise<ChatResponse> => {
   const accs = new Map<number, Acc>();
   const state: UsageState = { usage: none, end: none };
-  for await (const chunk of chunks) {
-    match(chunk)
-      .with({ type: 'start' }, (c) => { accs.set(c.index, startAcc(c.block)); })
-      .with({ type: 'delta' }, (c) => { const a = accs.get(c.index); if (a) applyDelta(a, c.delta); })
-      .with({ type: 'end' }, (c) => { state.end = some({ usage: c.usage, finishReason: c.finishReason }); })
-      .with({ type: 'usage' }, (c) => { state.usage = some(c.usage); })
-      .exhaustive();
-  }
+  for await (const chunk of chunks) applyChunkToState(chunk, accs, state);
   return assemble(accs, state, context);
 };
 

@@ -1,17 +1,61 @@
 import type { Pipeline } from '../types/connection.js';
 import type { Result } from '../types/result.js';
+import { ok } from '../types/result.js';
+import type { Option } from '../types/option.js';
+import { none, some } from '../types/option.js';
 import type { ChatRequest } from '../types/request.js';
 import type { ChatResponse } from '../types/response.js';
 import type { NeriumError } from '../types/error.js';
 import type { ChatChunk } from '../types/stream.js';
+import type { Capabilities, ModelInfo } from '../types/capabilities.js';
+import type { ModelId } from '../types/branded.js';
+
+const aggregateCapabilities = (
+  pipelines: readonly [Pipeline, ...ReadonlyArray<Pipeline>],
+  model: ModelId,
+): Option<Capabilities> => {
+  for (const pipeline of pipelines) {
+    const caps = pipeline.capabilitiesForModel(model);
+    if (caps.some) return caps;
+  }
+  return none;
+};
+
+const collectModelsFromPipeline = async (
+  pipeline: Pipeline,
+  seen: Set<string>,
+  out: ModelInfo[],
+): Promise<void> => {
+  if (!pipeline.listModels.some) return;
+  const res = await pipeline.listModels.value();
+  if (!res.ok) return;
+  for (const m of res.value) {
+    if (!seen.has(String(m.id))) {
+      seen.add(String(m.id));
+      out.push(m);
+    }
+  }
+};
+
+const aggregateListModels = (
+  pipelines: readonly [Pipeline, ...ReadonlyArray<Pipeline>],
+): Option<() => Promise<Result<ReadonlyArray<ModelInfo>, NeriumError>>> => {
+  if (!pipelines.some((p) => p.listModels.some)) return none;
+  return some(async () => {
+    const allModels: ModelInfo[] = [];
+    const seen = new Set<string>();
+    for (const p of pipelines) await collectModelsFromPipeline(p, seen, allModels);
+    return ok(allModels);
+  });
+};
 
 export const composeFallback = (
   pipelines: readonly [Pipeline, ...ReadonlyArray<Pipeline>],
 ): Pipeline => ({
   chat: (request) => tryChatInOrder(pipelines, request),
   stream: (request) => tryStreamInOrder(pipelines, request),
-  capabilitiesForModel: pipelines[0].capabilitiesForModel,
-  listModels: pipelines[0].listModels,
+  capabilitiesForModel: (model) => aggregateCapabilities(pipelines, model),
+  listModels: aggregateListModels(pipelines),
 });
 
 const isTransient = (error: NeriumError): boolean => error.category === 'transient';

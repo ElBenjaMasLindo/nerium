@@ -1,4 +1,3 @@
-import { match } from 'ts-pattern';
 import { ok, err } from '../types/result.js';
 import type { Result } from '../types/result.js';
 import { none, some } from '../types/option.js';
@@ -10,8 +9,8 @@ import type { ModelId } from '../types/branded.js';
 import type { ChatRequest } from '../types/request.js';
 import type { ChatResponse } from '../types/response.js';
 import type { ChatChunk } from '../types/stream.js';
-import type { ErrorCategory, NeriumError } from '../types/error.js';
-import type { HttpRequest, RawHttpResponse } from '../types/http-wire.js';
+import { normalizeError, type ErrorCategory, type NeriumError } from '../types/error.js';
+import type { HttpRequest, RawHttpResponse, RawStreamEvent } from '../types/http-wire.js';
 import type { Pipeline, CreateConnectionInput } from '../types/connection.js';
 import { send, openStream, type StreamedResponse } from '../adapters/http.js';
 import { parseSse } from './transport/sse.js';
@@ -28,7 +27,7 @@ type ConnCtx = {
 type LocalInfo = { code: string; message: string };
 
 const localError = (ctx: ConnCtx, category: ErrorCategory, info: LocalInfo): NeriumError => ({
-  category, code: info.code, provider: ctx.provider, status: none, message: info.message, raw: null,
+  category, code: info.code, provider: ctx.provider, status: none, message: info.message, raw: none,
 });
 
 const signalAborted = (request: ChatRequest): boolean => request.signal.some && request.signal.value.aborted;
@@ -133,30 +132,45 @@ const runChat = async (ctx: ConnCtx, request: ChatRequest): Promise<Result<ChatR
   return finalizeChat(ctx, request, authed.value);
 };
 
-const drainToRaw = async (resp: StreamedResponse): Promise<Result<RawHttpResponse, NeriumError>> => {
+const drainToRaw = async (resp: StreamedResponse, provider: string): Promise<Result<RawHttpResponse, NeriumError>> => {
   try {
     let body = '';
     for await (const chunk of resp.body) body += chunk;
     return ok({ status: resp.status, headers: resp.headers, body });
   } catch (e) {
-    return err(e as NeriumError);
+    return err(normalizeError(e, provider));
   }
 };
 
 const errorFromStream = async (ctx: ConnCtx, resp: StreamedResponse): Promise<NeriumError> => {
-  const drained = await drainToRaw(resp);
+  const drained = await drainToRaw(resp, ctx.provider);
   return drained.ok ? ctx.codec.parseError(drained.value) : drained.error;
+};
+
+const processSseEvent = (
+  ctx: ConnCtx,
+  event: RawStreamEvent,
+): Result<Option<ChatChunk | ReadonlyArray<ChatChunk>>, NeriumError> => ctx.codec.parseChunk(event);
+
+const yieldChunkValue = function* (
+  val: ChatChunk | ReadonlyArray<ChatChunk>,
+): Generator<Result<ChatChunk, NeriumError>> {
+  if (Array.isArray(val)) {
+    for (const item of val) yield ok(item);
+  } else {
+    yield ok(val as ChatChunk); // sadist-exception: array-narrowing
+  }
 };
 
 async function* streamChunks(ctx: ConnCtx, body: AsyncIterable<string>): AsyncGenerator<Result<ChatChunk, NeriumError>> {
   try {
     for await (const event of parseSse(body)) {
-      const result = ctx.codec.parseChunk(event);
+      const result = processSseEvent(ctx, event);
       if (!result.ok) { yield err(result.error); return; }
-      if (result.value.some) yield ok(result.value.value);
+      if (result.value.some) yield* yieldChunkValue(result.value.value);
     }
   } catch (e) {
-    yield err(e as NeriumError);
+    yield err(normalizeError(e, ctx.provider));
   }
 }
 
@@ -184,11 +198,13 @@ const capabilityForModel = (ctx: ConnCtx, model: ModelId): Option<Capabilities> 
   return found === undefined ? none : some(found);
 };
 
-const listModelsOption = (ctx: ConnCtx): Option<() => Promise<Result<ReadonlyArray<ModelInfo>, NeriumError>>> =>
-  match(ctx.codec.listModels)
-    .with({ some: true }, (l) => some(() => l.value(config(ctx, false))))
-    .with({ some: false }, () => none)
-    .exhaustive();
+const listModelsOption = (ctx: ConnCtx): Option<() => Promise<Result<ReadonlyArray<ModelInfo>, NeriumError>>> => {
+  if (ctx.codec.listModels.some) {
+    const listFn = ctx.codec.listModels.value;
+    return some(() => listFn(config(ctx, false)));
+  }
+  return none;
+};
 
 const toCapabilitiesMap = (models: ReadonlyArray<ModelInfo>): ReadonlyMap<ModelId, Capabilities> => {
   const map = new Map<ModelId, Capabilities>();
@@ -197,7 +213,7 @@ const toCapabilitiesMap = (models: ReadonlyArray<ModelInfo>): ReadonlyMap<ModelI
 };
 
 const missingListError = (codec: Codec): NeriumError => ({
-  category: 'invalid', code: 'no_list_models', provider: codec.provider, status: none, message: 'discover requested but codec has no listModels', raw: null,
+  category: 'invalid', code: 'no_list_models', provider: codec.provider, status: none, message: 'discover requested but codec has no listModels', raw: none,
 });
 
 const resolveDiscovered = async (ctx: ConnCtx): Promise<Result<ReadonlyMap<ModelId, Capabilities>, NeriumError>> => {

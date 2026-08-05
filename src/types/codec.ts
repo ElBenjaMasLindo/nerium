@@ -17,7 +17,7 @@ export type Codec = {
   provider: string;
   buildRequest: (request: ChatRequest, config: ConnectionRuntimeConfig) => Result<HttpRequest, NeriumError>;
   parseResponse: (raw: RawHttpResponse) => Result<ChatResponse, NeriumError>;
-  parseChunk: (event: RawStreamEvent) => Result<Option<ChatChunk>, NeriumError>;
+  parseChunk: (event: RawStreamEvent) => Result<Option<ChatChunk | ReadonlyArray<ChatChunk>>, NeriumError>;
   parseError: (raw: RawHttpResponse) => NeriumError;
   listModels: Option<(config: ConnectionRuntimeConfig) => Promise<Result<ReadonlyArray<ModelInfo>, NeriumError>>>;
 };

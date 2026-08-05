@@ -1,12 +1,11 @@
-import { match } from 'ts-pattern';
 import type { ErrorCategory } from '../types/error.js';
 
-export const categorizeByStatus = (status: number): ErrorCategory =>
-  match(status)
-    .with(401, () => 'invalid' as const)
-    .with(403, () => 'invalid' as const)
-    .with(429, () => 'transient' as const)
-    .when((s) => s >= 500, () => 'transient' as const)
-    .with(400, () => 'invalid' as const)
-    // sadist-exception: status is the full HTTP number domain — not enumerable exhaustively.
-    .otherwise(() => 'unknown' as const);
+const isTransientStatus = (s: number): boolean => s === 408 || s === 429 || s === 504 || s >= 500;
+const isInvalidStatus = (s: number): boolean => s === 401 || s === 403 || s === 404 || s === 422 || s === 400;
+
+export const categorizeByStatus = (status: number): ErrorCategory => {
+  if (isTransientStatus(status)) return 'transient';
+  if (isInvalidStatus(status)) return 'invalid';
+  if (status === 402) return 'refused';
+  return 'unknown';
+};
