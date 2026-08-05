@@ -11,7 +11,7 @@ import type { ChatChunk } from '../../src/types/stream.js';
 import type { NeriumError } from '../../src/types/error.js';
 
 const mkError = (category: NeriumError['category']): NeriumError => ({
-  category, code: 'x', provider: 'p', status: none, message: category, raw: null,
+  category, code: 'x', provider: 'p', status: none, message: category, raw: none,
 });
 
 const chatOK = (model: string): ChatResponse => ({

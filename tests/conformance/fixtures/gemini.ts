@@ -81,7 +81,13 @@ export const geminiChunkFixtures: ReadonlyArray<ChunkFixture> = [
   {
     description: 'functionCall finish maps to tool_call',
     raw: { eventName: none, data: '{"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_weather","args":{"city":"BA"}}}]},"finishReason":"STOP"}]}' },
-    expected: { ok: true, value: some({ type: 'end', usage: { input: 0, output: 0, total: 0, cacheWrite: none, cacheRead: none }, finishReason: 'tool_call' }) },
+    expected: {
+      ok: true,
+      value: some([
+        { type: 'start', index: 0, block: { type: 'tool_call', id: toToolCallId('get_weather'), name: 'get_weather' } },
+        { type: 'end', usage: { input: 0, output: 0, total: 0, cacheWrite: none, cacheRead: none }, finishReason: 'tool_call' },
+      ]),
+    },
   },
   {
     description: 'thought signature survives empty streaming text',
@@ -114,16 +120,16 @@ export const geminiErrorFixtures: ReadonlyArray<ErrorFixture> = [
   {
     description: '400 invalid',
     raw: { status: 400, headers: {}, body: '{"error":{"code":400,"message":"Invalid request","status":"INVALID_ARGUMENT"}}' },
-    expected: { category: 'invalid', code: 'gemini_error', provider: 'gemini', status: some(400), message: 'Invalid request', raw: '{"error":{"code":400,"message":"Invalid request","status":"INVALID_ARGUMENT"}}' },
+    expected: { category: 'invalid', code: 'gemini_error', provider: 'gemini', status: some(400), message: 'Invalid request', raw: some('{"error":{"code":400,"message":"Invalid request","status":"INVALID_ARGUMENT"}}') },
   },
   {
     description: '429 transient',
     raw: { status: 429, headers: {}, body: '{"error":{"code":429,"message":"Quota exceeded","status":"RESOURCE_EXHAUSTED"}}' },
-    expected: { category: 'transient', code: 'gemini_error', provider: 'gemini', status: some(429), message: 'Quota exceeded', raw: '{"error":{"code":429,"message":"Quota exceeded","status":"RESOURCE_EXHAUSTED"}}' },
+    expected: { category: 'transient', code: 'gemini_error', provider: 'gemini', status: some(429), message: 'Quota exceeded', raw: some('{"error":{"code":429,"message":"Quota exceeded","status":"RESOURCE_EXHAUSTED"}}') },
   },
   {
     description: 'PERMISSION_DENIED becomes refused',
     raw: { status: 403, headers: {}, body: '{"error":{"code":403,"message":"not allowed","status":"PERMISSION_DENIED"}}' },
-    expected: { category: 'refused', code: 'gemini_error', provider: 'gemini', status: some(403), message: 'not allowed', raw: '{"error":{"code":403,"message":"not allowed","status":"PERMISSION_DENIED"}}' },
+    expected: { category: 'refused', code: 'gemini_error', provider: 'gemini', status: some(403), message: 'not allowed', raw: some('{"error":{"code":403,"message":"not allowed","status":"PERMISSION_DENIED"}}') },
   },
 ];

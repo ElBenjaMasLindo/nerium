@@ -65,9 +65,9 @@ export const openaiChunkFixtures: ReadonlyArray<ChunkFixture> = [
     expected: { ok: true, value: none },
   },
   {
-    description: 'usage-only chunk (empty choices) is discarded',
+    description: 'usage-only chunk (empty choices) captures usage',
     raw: { eventName: none, data: '{"choices":[],"usage":{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}}' },
-    expected: { ok: true, value: none },
+    expected: { ok: true, value: { some: true, value: { type: 'usage', usage: { input: 4, output: 2, total: 6, cacheWrite: none, cacheRead: none } } } },
   },
   {
     description: 'end chunk with finish_reason length maps to max_tokens',
@@ -90,16 +90,16 @@ export const openaiErrorFixtures: ReadonlyArray<ErrorFixture> = [
   {
     description: '401 invalid (bad api key)',
     raw: { status: 401, headers: {}, body: '{"error":{"message":"Incorrect API key provided","type":"invalid_request_error","code":"invalid_api_key"}}' },
-    expected: { category: 'invalid', code: 'invalid_api_key', provider: 'openai', status: { some: true, value: 401 }, message: 'Incorrect API key provided', raw: '{"error":{"message":"Incorrect API key provided","type":"invalid_request_error","code":"invalid_api_key"}}' },
+    expected: { category: 'invalid', code: 'invalid_api_key', provider: 'openai', status: { some: true, value: 401 }, message: 'Incorrect API key provided', raw: some('{"error":{"message":"Incorrect API key provided","type":"invalid_request_error","code":"invalid_api_key"}}') },
   },
   {
     description: '429 transient (rate limit)',
     raw: { status: 429, headers: {}, body: '{"error":{"message":"Rate limit reached","type":"rate_limit_exceeded"}}' },
-    expected: { category: 'transient', code: 'rate_limit_exceeded', provider: 'openai', status: { some: true, value: 429 }, message: 'Rate limit reached', raw: '{"error":{"message":"Rate limit reached","type":"rate_limit_exceeded"}}' },
+    expected: { category: 'transient', code: 'rate_limit_exceeded', provider: 'openai', status: { some: true, value: 429 }, message: 'Rate limit reached', raw: some('{"error":{"message":"Rate limit reached","type":"rate_limit_exceeded"}}') },
   },
   {
     description: '400 with content_filter becomes refused',
     raw: { status: 400, headers: {}, body: '{"error":{"message":"Output blocked by content filter","type":"content_filter"}}' },
-    expected: { category: 'refused', code: 'content_filter', provider: 'openai', status: { some: true, value: 400 }, message: 'Output blocked by content filter', raw: '{"error":{"message":"Output blocked by content filter","type":"content_filter"}}' },
+    expected: { category: 'refused', code: 'content_filter', provider: 'openai', status: { some: true, value: 400 }, message: 'Output blocked by content filter', raw: some('{"error":{"message":"Output blocked by content filter","type":"content_filter"}}') },
   },
 ];

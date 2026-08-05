@@ -109,16 +109,16 @@ export const anthropicErrorFixtures: ReadonlyArray<ErrorFixture> = [
   {
     description: '401 invalid',
     raw: { status: 401, headers: {}, body: '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}' },
-    expected: { category: 'invalid', code: 'anthropic_error', provider: 'anthropic', status: some(401), message: 'invalid x-api-key', raw: '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}' },
+    expected: { category: 'invalid', code: 'anthropic_error', provider: 'anthropic', status: some(401), message: 'invalid x-api-key', raw: some('{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}') },
   },
   {
     description: '429 transient',
     raw: { status: 429, headers: {}, body: '{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}' },
-    expected: { category: 'transient', code: 'anthropic_error', provider: 'anthropic', status: some(429), message: 'slow down', raw: '{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}' },
+    expected: { category: 'transient', code: 'anthropic_error', provider: 'anthropic', status: some(429), message: 'slow down', raw: some('{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}') },
   },
   {
     description: 'permission_error becomes refused',
     raw: { status: 403, headers: {}, body: '{"type":"error","error":{"type":"permission_error","message":"not allowed"}}' },
-    expected: { category: 'refused', code: 'anthropic_error', provider: 'anthropic', status: some(403), message: 'not allowed', raw: '{"type":"error","error":{"type":"permission_error","message":"not allowed"}}' },
+    expected: { category: 'refused', code: 'anthropic_error', provider: 'anthropic', status: some(403), message: 'not allowed', raw: some('{"type":"error","error":{"type":"permission_error","message":"not allowed"}}') },
   },
 ];

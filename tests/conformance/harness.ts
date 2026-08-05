@@ -16,7 +16,7 @@ export type ChunkFixture = {
   description: string;
   raw: RawStreamEvent;
   // Optional because parseChunk may discard (e.g. [DONE] or usage-only chunks).
-  expected: { ok: true; value: Option<ChatChunk> } | { ok: false; error: NeriumError };
+  expected: { ok: true; value: Option<ChatChunk | ReadonlyArray<ChatChunk>> } | { ok: false; error: NeriumError };
 };
 
 export type ErrorFixture = {
