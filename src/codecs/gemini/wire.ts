@@ -1,7 +1,6 @@
-import { match } from 'ts-pattern';
 import { some, none } from '../../types/option.js';
 import type { Option } from '../../types/option.js';
-import type { Message, SamplingParams, ToolDefinition } from '../../types/request.js';
+import type { Message, SamplingParams, ToolDefinition, ResponseFormat } from '../../types/request.js';
 import type { ContentBlock } from '../../types/content.js';
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -17,20 +16,25 @@ const toTextPart = (b: TextBlock): Record<string, unknown> => ({ text: b.text })
 const toMediaPart = (b: MediaBlock): Record<string, unknown> => ({ inlineData: { mimeType: b.mimeType, data: b.data } });
 const toReasoningPart = (b: ReasoningBlock): Record<string, unknown> => ({ thought: true, text: b.text });
 const toToolCallPart = (b: ToolCallBlock): Record<string, unknown> => ({ functionCall: { name: b.name, args: b.arguments } });
-// Gemini has no call id; Nerium mints the ToolCallId from the function name (see gemini-parse),
-// so the id string here is exactly the name Gemini expects back.
+// Gemini functionResponse expects function name in name field
 const toToolResultPart = (b: ToolResultBlock): Record<string, unknown> => ({ functionResponse: { name: b.toolCallId, response: b.result } });
 const toOpaquePart = (b: Extract<ContentBlock, { type: 'opaque' }>): Record<string, unknown> => ({ [b.subtype]: b.raw });
 
-const toPart = (block: ContentBlock): Record<string, unknown> =>
-  match(block)
-    .with({ type: 'text' }, toTextPart)
-    .with({ type: 'media' }, toMediaPart)
-    .with({ type: 'reasoning' }, toReasoningPart)
-    .with({ type: 'tool_call' }, toToolCallPart)
-    .with({ type: 'tool_result' }, toToolResultPart)
-    .with({ type: 'opaque' }, toOpaquePart)
-    .exhaustive();
+const toStandardPart = (block: ContentBlock): Option<Record<string, unknown>> => {
+  if (block.type === 'text') return some(toTextPart(block));
+  if (block.type === 'media') return some(toMediaPart(block));
+  if (block.type === 'reasoning') return some(toReasoningPart(block));
+  return none;
+};
+
+const toPart = (block: ContentBlock): Record<string, unknown> => {
+  const std = toStandardPart(block);
+  if (std.some) return std.value;
+  if (block.type === 'tool_call') return toToolCallPart(block);
+  if (block.type === 'tool_result') return toToolResultPart(block);
+  if (block.type === 'opaque') return toOpaquePart(block);
+  return {};
+};
 
 const toParts = (blocks: ReadonlyArray<ContentBlock>): ReadonlyArray<Record<string, unknown>> =>
   blocks.map(toPart);
@@ -74,11 +78,20 @@ const putIfSome = (out: Record<string, unknown>, key: string, value: Option<numb
   if (value.some) out[key] = value.value;
 };
 
-export const buildGenerationConfig = (sampling: SamplingParams): Record<string, unknown> => {
+export const buildGenerationConfig = (
+  sampling: SamplingParams,
+  responseFormat?: Option<ResponseFormat>,
+): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
   putIfSome(out, 'temperature', sampling.temperature);
   putIfSome(out, 'topP', sampling.topP);
   putIfSome(out, 'maxOutputTokens', sampling.maxOutputTokens);
   if (sampling.stopSequences.length > 0) out['stopSequences'] = [...sampling.stopSequences];
+  if (responseFormat && responseFormat.some) {
+    out['responseMimeType'] = 'application/json';
+    if (responseFormat.value.schema) {
+      out['responseSchema'] = responseFormat.value.schema;
+    }
+  }
   return out;
 };

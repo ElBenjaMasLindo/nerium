@@ -1,4 +1,3 @@
-import { match } from 'ts-pattern';
 import { some, none } from '../../types/option.js';
 import type { Option } from '../../types/option.js';
 import { ok, err } from '../../types/result.js';
@@ -16,15 +15,16 @@ import { toToolCallId, toModelId } from '../../types/branded.js';
 const provider = 'openai';
 const zeroUsage: TokenUsage = { input: 0, output: 0, total: 0, cacheWrite: none, cacheRead: none };
 
-export const mapFinishReason = (reason: string): FinishReason =>
-  match(reason)
-    .with('stop', () => 'complete' as const)
-    .with('length', () => 'max_tokens' as const)
-    .with('tool_calls', () => 'tool_call' as const)
-    .with('function_call', () => 'tool_call' as const)
-    .with('content_filter', () => 'filtered' as const)
-    // sadist-exception: NERIUM-1 finish-reason is an open provider string domain (design sec 6) — not exhaustively enumerable.
-    .otherwise(() => 'unknown' as const);
+export const mapFinishReason = (reason: string): FinishReason => {
+  switch (reason) {
+    case 'stop': return 'complete';
+    case 'length': return 'max_tokens';
+    case 'tool_calls':
+    case 'function_call': return 'tool_call';
+    case 'content_filter': return 'filtered';
+    default: return 'unknown';
+  }
+};
 
 const parseBodyObject = (body: string): Option<Record<string, unknown>> => {
   const parsed = safeJsonParse(body);
@@ -106,7 +106,7 @@ const messageToBlocks = (message: Record<string, unknown>): ContentBlock[] => {
 };
 
 const unknownError = (raw: RawHttpResponse, message: string): NeriumError => ({
-  category: 'unknown', code: 'parse', provider, status: some(raw.status), message, raw: raw.body,
+  category: 'unknown', code: 'parse', provider, status: some(raw.status), message, raw: some(raw.body),
 });
 
 type ValidatedResponse = { message: Record<string, unknown>; choice: Record<string, unknown>; body: Record<string, unknown> };
@@ -138,13 +138,15 @@ export const parseResponse = (raw: RawHttpResponse): Result<ChatResponse, Nerium
 };
 
 const chunkError = (event: RawStreamEvent): NeriumError => ({
-  category: 'unknown', code: 'chunk', provider, status: none, message: 'invalid chunk', raw: event.data,
+  category: 'unknown', code: 'chunk', provider, status: none, message: 'invalid chunk', raw: some(event.data),
 });
 
-const firstToolCall = (raw: unknown): Option<Record<string, unknown>> => {
+const getToolCall = (raw: unknown): Option<Record<string, unknown>> => {
   if (!Array.isArray(raw) || raw.length === 0) return none;
-  const first = raw[0];
-  return isRecord(first) ? some(first) : none;
+  for (const item of raw) {
+    if (isRecord(item)) return some(item);
+  }
+  return none;
 };
 
 const toolCallChunk = (tc: Record<string, unknown>): Option<ChatChunk> => {
@@ -161,16 +163,40 @@ const finishChunk = (choice: Record<string, unknown>, body: Record<string, unkno
   return some({ type: 'end', usage: mapUsage(body['usage']), finishReason: mapFinishReason(finishRaw) });
 };
 
+const textOrReasoningChunk = (delta: Record<string, unknown>): Option<ChatChunk> => {
+  const reasoning = delta['reasoning_content'];
+  if (isString(reasoning) && reasoning !== '') {
+    return some({ type: 'delta', index: 0, delta: { type: 'reasoning', text: reasoning, signature: none } });
+  }
+  const content = delta['content'];
+  if (isString(content) && content !== '') {
+    return some({ type: 'delta', index: 0, delta: { type: 'text', text: content } });
+  }
+  return none;
+};
+
+const deltaChunk = (delta: Record<string, unknown>): Option<ChatChunk> => {
+  const tr = textOrReasoningChunk(delta);
+  if (tr.some) return tr;
+  const tc = getToolCall(delta['tool_calls']);
+  if (tc.some) return toolCallChunk(tc.value);
+  const role = delta['role'];
+  if (isString(role)) return some({ type: 'start', index: 0, block: { type: 'text' } });
+  return none;
+};
+
 const toChunk = (choice: Record<string, unknown>, body: Record<string, unknown>): Option<ChatChunk> => {
   const delta = choice['delta'];
   if (!isRecord(delta)) return finishChunk(choice, body);
-  const role = delta['role'];
-  if (isString(role)) return some({ type: 'start', index: 0, block: { type: 'text' } });
-  const tc = firstToolCall(delta['tool_calls']);
-  if (tc.some) return toolCallChunk(tc.value);
-  const content = delta['content'];
-  if (isString(content) && content !== '') return some({ type: 'delta', index: 0, delta: { type: 'text', text: content } });
-  return finishChunk(choice, body);
+  const chunk = deltaChunk(delta);
+  return chunk.some ? chunk : finishChunk(choice, body);
+};
+
+const parseEmptyChoicesChunk = (body: Record<string, unknown>): Option<ChatChunk> => {
+  if (isRecord(body['usage'])) {
+    return some({ type: 'usage', usage: mapUsage(body['usage']) });
+  }
+  return none;
 };
 
 export const parseChunk = (event: RawStreamEvent): Result<Option<ChatChunk>, NeriumError> => {
@@ -178,8 +204,7 @@ export const parseChunk = (event: RawStreamEvent): Result<Option<ChatChunk>, Ner
   const body = parseBodyObject(event.data);
   if (!body.some) return err(chunkError(event));
   const choices = body.value['choices'];
-  if (!Array.isArray(choices)) return ok(none);
-  if (choices.length === 0) return ok(none);
+  if (!Array.isArray(choices) || choices.length === 0) return ok(parseEmptyChoicesChunk(body.value));
   const choice = choices[0];
   if (!isRecord(choice)) return err(chunkError(event));
   return ok(toChunk(choice, body.value));
@@ -198,5 +223,5 @@ export const parseError = (raw: RawHttpResponse): NeriumError => {
   const errRecord: Record<string, unknown> = body.some && isRecord(body.value['error']) ? body.value['error'] : {};
   const code = isString(errRecord['code']) ? errRecord['code'] : isString(errRecord['type']) ? errRecord['type'] : 'unknown';
   const message = isString(errRecord['message']) ? errRecord['message'] : raw.body;
-  return { category: refineCategory(raw), code, provider, status: some(raw.status), message, raw: raw.body };
+  return { category: refineCategory(raw), code, provider, status: some(raw.status), message, raw: some(raw.body) };
 };

@@ -1,4 +1,3 @@
-import { match } from 'ts-pattern';
 import { some, none } from '../../types/option.js';
 import type { Option } from '../../types/option.js';
 import { ok, err } from '../../types/result.js';
@@ -15,13 +14,14 @@ import { toToolCallId, toModelId } from '../../types/branded.js';
 
 const provider = 'gemini';
 
-export const mapFinishReason = (reason: string): FinishReason =>
-  match(reason)
-    .with('STOP', () => 'complete' as const)
-    .with('MAX_TOKENS', () => 'max_tokens' as const)
-    .with('SAFETY', () => 'filtered' as const)
-    // sadist-exception: NERIUM-1 provider finish-reason is an open string domain (design sec 6).
-    .otherwise(() => 'unknown' as const);
+export const mapFinishReason = (reason: string): FinishReason => {
+  switch (reason) {
+    case 'STOP': return 'complete';
+    case 'MAX_TOKENS': return 'max_tokens';
+    case 'SAFETY': return 'filtered';
+    default: return 'unknown';
+  }
+};
 
 const parseBodyObject = (body: string): Option<Record<string, unknown>> => {
   const parsed = safeJsonParse(body);
@@ -72,15 +72,12 @@ const nameOrEmpty = (fc: Record<string, unknown>): string =>
 const argsOrEmpty = (fc: Record<string, unknown>): Record<string, unknown> =>
   isRecord(fc['args']) ? fc['args'] : {};
 
-const functionCallId = (fc: Record<string, unknown>): string =>
-  isString(fc['id']) ? fc['id'] : nameOrEmpty(fc);
-
 const pushFunctionCall = (blocks: ContentBlock[], part: Record<string, unknown>): void => {
   const fc = part['functionCall'];
   if (!isRecord(fc)) return;
   const name = nameOrEmpty(fc);
-  // Prefer the wire id when present; otherwise fall back to the function name so a later tool_result can recover it.
-  blocks.push({ type: 'tool_call', id: toToolCallId(functionCallId(fc)), name, arguments: argsOrEmpty(fc), providerOptions: none });
+  // Gemini expects the function name in functionResponse.name, so mint ToolCallId from function name.
+  blocks.push({ type: 'tool_call', id: toToolCallId(name), name, arguments: argsOrEmpty(fc), providerOptions: none });
 };
 
 const pushPart = (blocks: ContentBlock[], part: unknown): void => {
@@ -123,7 +120,7 @@ const candidateFinish = (body: Record<string, unknown>): FinishReason => {
 };
 
 const unknownError = (raw: RawHttpResponse, message: string): NeriumError => ({
-  category: 'unknown', code: 'parse', provider, status: some(raw.status), message, raw: raw.body,
+  category: 'unknown', code: 'parse', provider, status: some(raw.status), message, raw: some(raw.body),
 });
 
 export const parseResponse = (raw: RawHttpResponse): Result<ChatResponse, NeriumError> => {
@@ -144,10 +141,10 @@ export const parseResponse = (raw: RawHttpResponse): Result<ChatResponse, Nerium
 };
 
 const chunkError = (event: RawStreamEvent): NeriumError => ({
-  category: 'unknown', code: 'chunk', provider, status: none, message: 'invalid chunk', raw: event.data,
+  category: 'unknown', code: 'chunk', provider, status: none, message: 'invalid chunk', raw: some(event.data),
 });
 
-type StreamOptions = { ok: true; value: Option<ChatChunk> } | { ok: false; error: NeriumError };
+type StreamOptions = { ok: true; value: Option<ChatChunk | ReadonlyArray<ChatChunk>> } | { ok: false; error: NeriumError };
 
 const firstPart = (parts: unknown): Option<Record<string, unknown>> => {
   if (!Array.isArray(parts) || parts.length === 0) return none;
@@ -171,7 +168,7 @@ const deltaFromPart = (part: Record<string, unknown>, index: number): Option<Cha
 
 const functionCallChunk = (fc: Record<string, unknown>, index: number): Option<ChatChunk> => {
   const name = nameOrEmpty(fc);
-  return some({ type: 'start', index, block: { type: 'tool_call', id: toToolCallId(functionCallId(fc)), name } });
+  return some({ type: 'start', index, block: { type: 'tool_call', id: toToolCallId(name), name } });
 };
 
 const endChunk = (body: Record<string, unknown>): Option<{ usage: TokenUsage; finishReason: FinishReason }> => {
@@ -204,20 +201,25 @@ const firstCandidateParts = (body: Record<string, unknown>): ReadonlyArray<unkno
 const hasFunctionCall = (body: Record<string, unknown>): boolean =>
   firstCandidateParts(body).some((part) => isRecord(part) && isRecord(part['functionCall']));
 
+const endOrDelta = (body: Record<string, unknown>, deltaOpt: Option<ChatChunk>): StreamOptions => {
+  const endOpt = endChunk(body);
+  if (endOpt.some) {
+    const finishReason = hasFunctionCall(body) ? 'tool_call' : endOpt.value.finishReason;
+    const endChunkObj: ChatChunk = { type: 'end', usage: endOpt.value.usage, finishReason };
+    return ok(some(deltaOpt.some ? [deltaOpt.value, endChunkObj] : endChunkObj));
+  }
+  return deltaOpt.some ? ok(deltaOpt) : ok(none);
+};
+
 const dataChunk = (data: string): StreamOptions => {
   const body = parseBodyObject(data);
   if (!body.some) return err(chunkError({ eventName: none, data }));
-  const end = endChunk(body.value);
-  if (end.some) {
-    const finishReason = hasFunctionCall(body.value) ? 'tool_call' : end.value.finishReason;
-    return ok(some({ type: 'end', usage: end.value.usage, finishReason }));
-  }
-  const part = candidatePart(body.value);
-  if (!part.some) return ok(none);
-  return ok(deltaFromPart(part.value, 0));
+  const partOpt = candidatePart(body.value);
+  const deltaOpt = partOpt.some ? deltaFromPart(partOpt.value, 0) : none;
+  return endOrDelta(body.value, deltaOpt);
 };
 
-export const parseChunk = (event: RawStreamEvent): Result<Option<ChatChunk>, NeriumError> => dataChunk(event.data);
+export const parseChunk = (event: RawStreamEvent): Result<Option<ChatChunk | ReadonlyArray<ChatChunk>>, NeriumError> => dataChunk(event.data);
 
 const refineCategory = (raw: RawHttpResponse): ErrorCategory => {
   const body = parseBodyObject(raw.body);
@@ -236,5 +238,5 @@ const geminiMessage = (raw: RawHttpResponse): string => {
 };
 
 export const parseError = (raw: RawHttpResponse): NeriumError => ({
-  category: refineCategory(raw), code: 'gemini_error', provider, status: some(raw.status), message: geminiMessage(raw), raw: raw.body,
+  category: refineCategory(raw), code: 'gemini_error', provider, status: some(raw.status), message: geminiMessage(raw), raw: some(raw.body),
 });

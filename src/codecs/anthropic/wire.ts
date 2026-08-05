@@ -1,4 +1,3 @@
-import { match } from 'ts-pattern';
 import { some, none } from '../../types/option.js';
 import type { Option } from '../../types/option.js';
 import type { Message, SamplingParams, ToolDefinition } from '../../types/request.js';
@@ -24,21 +23,31 @@ type ToolResultBlock = Extract<ContentBlock, { type: 'tool_result' }>;
 
 const toText = (b: TextBlock): Record<string, unknown> => withCache({ type: 'text', text: b.text }, cacheControl(b.providerOptions));
 const toMedia = (b: MediaBlock): Record<string, unknown> => withCache({ type: 'image', source: { type: 'base64', media_type: b.mimeType, data: b.data } }, cacheControl(b.providerOptions));
-const toReasoning = (b: ReasoningBlock): Record<string, unknown> => withCache({ type: 'thinking', thinking: b.text }, cacheControl(b.providerOptions));
+const toReasoning = (b: ReasoningBlock): Record<string, unknown> => {
+  const block: Record<string, unknown> = { type: 'thinking', thinking: b.text };
+  if (b.signature.some) block['signature'] = b.signature.value;
+  return withCache(block, cacheControl(b.providerOptions));
+};
 const toToolUse = (b: ToolCallBlock): Record<string, unknown> => withCache({ type: 'tool_use', id: b.id, name: b.name, input: b.arguments }, cacheControl(b.providerOptions));
 const toToolResult = (b: ToolResultBlock): Record<string, unknown> => withCache({ type: 'tool_result', tool_use_id: b.toolCallId, content: JSON.stringify(b.result) }, cacheControl(b.providerOptions));
 
 const toOpaque = (b: ContentBlock): Record<string, unknown> => ({ type: 'opaque', subtype: b.type, raw: b });
 
-const toBlock = (block: ContentBlock): Record<string, unknown> =>
-  match(block)
-    .with({ type: 'text' }, toText)
-    .with({ type: 'media' }, toMedia)
-    .with({ type: 'reasoning' }, toReasoning)
-    .with({ type: 'tool_call' }, toToolUse)
-    .with({ type: 'tool_result' }, toToolResult)
-    .with({ type: 'opaque' }, toOpaque)
-    .exhaustive();
+const toStandardBlock = (block: ContentBlock): Option<Record<string, unknown>> => {
+  if (block.type === 'text') return some(toText(block));
+  if (block.type === 'media') return some(toMedia(block));
+  if (block.type === 'reasoning') return some(toReasoning(block));
+  return none;
+};
+
+const toBlock = (block: ContentBlock): Record<string, unknown> => {
+  const std = toStandardBlock(block);
+  if (std.some) return std.value;
+  if (block.type === 'tool_call') return toToolUse(block);
+  if (block.type === 'tool_result') return toToolResult(block);
+  if (block.type === 'opaque') return toOpaque(block);
+  return {};
+};
 
 const toBlocks = (blocks: ReadonlyArray<ContentBlock>): ReadonlyArray<Record<string, unknown>> =>
   blocks.map(toBlock);
@@ -62,13 +71,41 @@ export const splitSystem = (
   return { system, conversation };
 };
 
+export const splitSystemBlocks = (
+  messages: ReadonlyArray<Message>,
+): { system: Option<ReadonlyArray<Record<string, unknown>>>; conversation: ReadonlyArray<Message> } => {
+  const systemBlocks: Array<Record<string, unknown>> = [];
+  const conversation: Message[] = [];
+  for (const message of messages) {
+    if (message.role === 'system') {
+      systemBlocks.push(...toBlocks(message.content));
+    } else {
+      conversation.push(message);
+    }
+  }
+  const system = systemBlocks.length === 0 ? none : some(systemBlocks);
+  return { system, conversation };
+};
+
 const roleOf = (role: string): 'user' | 'assistant' =>
   role === 'assistant' ? 'assistant' : 'user';
 
 export const buildMessages = (
   messages: ReadonlyArray<Message>,
-): ReadonlyArray<{ role: 'user' | 'assistant'; content: ReadonlyArray<Record<string, unknown>> }> =>
-  messages.map((m) => ({ role: roleOf(m.role), content: toBlocks(m.content) }));
+): ReadonlyArray<{ role: 'user' | 'assistant'; content: ReadonlyArray<Record<string, unknown>> }> => {
+  const result: Array<{ role: 'user' | 'assistant'; content: Array<Record<string, unknown>> }> = [];
+  for (const m of messages) {
+    const role = roleOf(m.role);
+    const blocks = [...toBlocks(m.content)];
+    const last = result[result.length - 1];
+    if (last && last.role === role) {
+      last.content.push(...blocks);
+    } else {
+      result.push({ role, content: blocks });
+    }
+  }
+  return result;
+};
 
 export const buildTools = (
   tools: ReadonlyArray<ToolDefinition>,

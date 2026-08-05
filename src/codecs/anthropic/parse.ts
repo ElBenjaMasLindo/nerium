@@ -1,4 +1,3 @@
-import { match } from 'ts-pattern';
 import { some, none } from '../../types/option.js';
 import type { Option } from '../../types/option.js';
 import { ok, err } from '../../types/result.js';
@@ -15,14 +14,15 @@ import { toToolCallId, toModelId } from '../../types/branded.js';
 
 const provider = 'anthropic';
 
-export const mapFinishReason = (reason: string): FinishReason =>
-  match(reason)
-    .with('end_turn', () => 'complete' as const)
-    .with('max_tokens', () => 'max_tokens' as const)
-    .with('stop_sequence', () => 'stop_sequence' as const)
-    .with('tool_use', () => 'tool_call' as const)
-    // sadist-exception: NERIUM-1 provider stop-reason is an open string domain (design sec 6).
-    .otherwise(() => 'unknown' as const);
+export const mapFinishReason = (reason: string): FinishReason => {
+  switch (reason) {
+    case 'end_turn': return 'complete';
+    case 'max_tokens': return 'max_tokens';
+    case 'stop_sequence': return 'stop_sequence';
+    case 'tool_use': return 'tool_call';
+    default: return 'unknown';
+  }
+};
 
 const parseBodyObject = (body: string): Option<Record<string, unknown>> => {
   const parsed = safeJsonParse(body);
@@ -78,21 +78,30 @@ const pushImage = (blocks: ContentBlock[], block: Record<string, unknown>): void
   blocks.push({ type: 'media', mimeType: mediaType, data, providerOptions: none });
 };
 
+const pushMediaOrThinking = (blocks: ContentBlock[], type: string, block: Record<string, unknown>): boolean => {
+  if (type === 'thinking') { pushThinking(blocks, block); return true; }
+  if (type === 'image') { pushImage(blocks, block); return true; }
+  return false;
+};
+
+const pushKnownBlock = (blocks: ContentBlock[], type: string, block: Record<string, unknown>): boolean => {
+  if (type === 'text') { if (isString(block['text'])) pushText(blocks, block['text']); return true; }
+  if (pushMediaOrThinking(blocks, type, block)) return true;
+  if (type === 'tool_use') { pushToolUse(blocks, block); return true; }
+  if (type === 'tool_result') { pushToolResult(blocks, block); return true; }
+  return false;
+};
+
 const pushContentBlock = (blocks: ContentBlock[], block: unknown): void => {
   if (!isRecord(block)) return;
-  const type = block['type'];
-  match(type)
-    .with('text', () => { if (isString(block['text'])) pushText(blocks, block['text']); })
-    .with('thinking', () => pushThinking(blocks, block))
-    .with('tool_use', () => pushToolUse(blocks, block))
-    .with('tool_result', () => pushToolResult(blocks, block))
-    .with('image', () => pushImage(blocks, block))
-    // sadist-exception: NERIUM-1 provider block type is an open vocabulary (design sec 4).
-    .otherwise(() => blocks.push({ type: 'opaque', subtype: isString(type) ? type : 'unknown', raw: block, providerOptions: none }));
+  const type = isString(block['type']) ? block['type'] : 'unknown';
+  if (!pushKnownBlock(blocks, type, block)) {
+    blocks.push({ type: 'opaque', subtype: type, raw: block, providerOptions: none });
+  }
 };
 
 const unknownError = (raw: RawHttpResponse, message: string): NeriumError => ({
-  category: 'unknown', code: 'parse', provider, status: some(raw.status), message, raw: raw.body,
+  category: 'unknown', code: 'parse', provider, status: some(raw.status), message, raw: some(raw.body),
 });
 
 export const parseResponse = (raw: RawHttpResponse): Result<ChatResponse, NeriumError> => {
@@ -112,24 +121,24 @@ export const parseResponse = (raw: RawHttpResponse): Result<ChatResponse, Nerium
 };
 
 const chunkError = (event: RawStreamEvent): NeriumError => ({
-  category: 'unknown', code: 'chunk', provider, status: none, message: 'invalid chunk', raw: event.data,
+  category: 'unknown', code: 'chunk', provider, status: none, message: 'invalid chunk', raw: some(event.data),
 });
 
 type StreamOptions = { ok: true; value: Option<ChatChunk> } | { ok: false; error: NeriumError };
 
+const startToolCallBlock = (type: Record<string, unknown>, data: string): Result<ContentBlockStart, NeriumError> => {
+  const id = type['id'];
+  const name = type['name'];
+  if (!isString(id) || !isString(name)) return err(chunkError({ eventName: none, data }));
+  return ok({ type: 'tool_call', id: toToolCallId(id), name });
+};
+
 const startBlock = (type: Record<string, unknown>, data: string): Result<ContentBlockStart, NeriumError> => {
   const blockType = type['type'];
-  return match(blockType)
-    .with('text', () => ok({ type: 'text' }) as Result<ContentBlockStart, NeriumError>)
-    .with('thinking', () => ok({ type: 'reasoning', signature: isString(type['signature']) ? some(type['signature']) : none }) as Result<ContentBlockStart, NeriumError>)
-    .with('tool_use', () => {
-      const id = type['id'];
-      const name = type['name'];
-      if (!isString(id) || !isString(name)) return err(chunkError({ eventName: none, data }));
-      return ok({ type: 'tool_call', id: toToolCallId(id), name });
-    })
-    // sadist-exception: NERIUM-1 provider block type is an open vocabulary.
-    .otherwise(() => ok({ type: 'opaque', subtype: isString(blockType) ? blockType : 'unknown' })) as Result<ContentBlockStart, NeriumError>;
+  if (blockType === 'text') return ok({ type: 'text' });
+  if (blockType === 'thinking') return ok({ type: 'reasoning', signature: isString(type['signature']) ? some(type['signature']) : none });
+  if (blockType === 'tool_use') return startToolCallBlock(type, data);
+  return ok({ type: 'opaque', subtype: isString(blockType) ? blockType : 'unknown' });
 };
 
 const handleStart = (data: string): StreamOptions => {
@@ -143,16 +152,20 @@ const handleStart = (data: string): StreamOptions => {
   return ok(some({ type: 'start', index, block: block.value }));
 };
 
+const reasoningOrSignatureDelta = (delta: Record<string, unknown>, index: number): Option<ChatChunk> => {
+  const t = delta['type'];
+  if (t === 'thinking_delta' && isString(delta['thinking'])) return some({ type: 'delta', index, delta: { type: 'reasoning', text: delta['thinking'], signature: none } });
+  if (t === 'signature_delta' && isString(delta['signature'])) return some({ type: 'delta', index, delta: { type: 'reasoning', text: '', signature: some(delta['signature']) } });
+  return none;
+};
+
 const deltaPayload = (delta: Record<string, unknown>, index: number): Option<ChatChunk> => {
   const t = delta['type'];
-  const text = match(t)
-    .with('text_delta', () => isString(delta['text']) ? some({ type: 'delta', index, delta: { type: 'text', text: delta['text'] } }) : none)
-    .with('thinking_delta', () => isString(delta['thinking']) ? some({ type: 'delta', index, delta: { type: 'reasoning', text: delta['thinking'], signature: none } }) : none)
-    .with('signature_delta', () => isString(delta['signature']) ? some({ type: 'delta', index, delta: { type: 'reasoning', text: '', signature: some(delta['signature']) } }) : none)
-    .with('input_json_delta', () => isString(delta['partial_json']) ? some({ type: 'delta', index, delta: { type: 'tool_call', argumentsFragment: delta['partial_json'] } }) : none)
-    // sadist-exception: NERIUM-1 provider delta type is an open vocabulary.
-    .otherwise(() => none) as Option<ChatChunk>;
-  return text;
+  if (t === 'text_delta' && isString(delta['text'])) return some({ type: 'delta', index, delta: { type: 'text', text: delta['text'] } });
+  const rs = reasoningOrSignatureDelta(delta, index);
+  if (rs.some) return rs;
+  if (t === 'input_json_delta' && isString(delta['partial_json'])) return some({ type: 'delta', index, delta: { type: 'tool_call', argumentsFragment: delta['partial_json'] } });
+  return none;
 };
 
 const handleDelta = (data: string): StreamOptions => {
@@ -185,14 +198,16 @@ const handleMessageStart = (data: string): StreamOptions => {
 const handleMessageDelta = (data: string): StreamOptions =>
   ok(some({ type: 'end', ...endUsage(data) }));
 
-const namedHandler = (name: Option<string>, data: string): StreamOptions =>
-  match(name)
-    .with({ some: true, value: 'content_block_start' }, () => handleStart(data))
-    .with({ some: true, value: 'content_block_delta' }, () => handleDelta(data))
-    .with({ some: true, value: 'message_start' }, () => handleMessageStart(data))
-    .with({ some: true, value: 'message_delta' }, () => handleMessageDelta(data))
-    // sadist-exception: NERIUM-1 SSE event names are an open provider vocabulary — not exhaustively enumerable.
-    .otherwise(() => ok(none));
+const namedHandler = (name: Option<string>, data: string): StreamOptions => {
+  if (!name.some) return ok(none);
+  switch (name.value) {
+    case 'content_block_start': return handleStart(data);
+    case 'content_block_delta': return handleDelta(data);
+    case 'message_start': return handleMessageStart(data);
+    case 'message_delta': return handleMessageDelta(data);
+    default: return ok(none);
+  }
+};
 
 export const parseChunk = (event: RawStreamEvent): Result<Option<ChatChunk>, NeriumError> =>
   namedHandler(event.eventName, event.data);
@@ -212,5 +227,5 @@ export const parseError = (raw: RawHttpResponse): NeriumError => {
   const message = body.some && isRecord(body.value['error']) && isString(body.value['error']['message'])
     ? body.value['error']['message']
     : raw.body;
-  return { category: refineCategory(raw), code: 'anthropic_error', provider, status: some(raw.status), message, raw: raw.body };
+  return { category: refineCategory(raw), code: 'anthropic_error', provider, status: some(raw.status), message, raw: some(raw.body) };
 };
