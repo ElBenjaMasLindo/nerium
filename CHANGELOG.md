@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Gemini Chunk Fixtures**: Added 3 fixtures covering additional `finishReason` mappings (`SAFETY` → `filtered`, `MAX_TOKENS` → `max_tokens`) and a discarded chunk without candidates.
 
 ### Changed
+- **Agent Instructions (`AGENTS.md`)**: Added requirement to keep `docs/SKILL.md` updated whenever API patterns, exports, or contracts change.
 - **Codec Organization**: Reorganized provider codecs (`anthropic`, `gemini`, `openai`) into dedicated subdirectories under `src/codecs/`.
 - **OpenAI Codec Refactor**: Eliminated seven duplicate tool-call helper functions in `openai/parse.ts` (`fnOf`, `nameOf`, `argsOf`, `nameFromFunction`, `argsFromFunction`, `nameOfStringRecord`, `argsOfStringRecord`) and replaced with two direct accessors (`fnName`, `fnArgs`).
 - **OpenAI Error Parsing**: Inlined `errorCodeField` and `extractErrorFields` into `parseError` to match the Anthropic and Gemini pattern.

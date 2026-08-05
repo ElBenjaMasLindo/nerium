@@ -2,6 +2,7 @@ Before investigating or modifying code, read and apply the rules in the followin
 
 1. **[CONTRIBUTING.md](./CONTRIBUTING.md)**: Review the *Scope Filter* (Zero runtime dependencies, pure codecs) and conventional commit rules.
 2. **[CHANGELOG.md](./CHANGELOG.md)**: Historical record of project changes; must be kept updated under `## [Unreleased]` for every new feature or bug fix following Keep a Changelog.
+3. **[docs/SKILL.md](./docs/SKILL.md)**: Skill documentation; must be kept updated for any changes to API patterns, exports, or contracts.
 
 ## Quality Protocol
 
