@@ -3,7 +3,6 @@
   "description": "Provider-agnostic. Infrastructure-agnostic. Runtime-agnostic. Zero deps for llms calls.",
   "keywords": ["llm", "sdk", "typescript", "provider-agnostic", "multi-provider", "zero-dependencies", "chat", "streaming", "tool-calling"],
   "version": "0.1.0",
-  "packageManager": "pnpm@11.13.1",
   "license": "MPL-2.0",
   "type": "module",
   "exports": {
