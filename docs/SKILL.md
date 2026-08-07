@@ -1,7 +1,7 @@
 ---
 name: nerium
 description: Use when writing or reviewing code that interacts with LLMs using the `nerium` client, or when creating custom provider codecs. Covers connection setup, tool loops, Option<T> strictness, zero-dependency pattern matching, and error handling.
-license: MPL-2.0
+license: MIT
 ---
 
 ## Core API Patterns
@@ -17,11 +17,11 @@ license: MPL-2.0
 ## 1. Setup & Config
 
 ```ts
-import { 
-  createConnection, 
-  toPublicConnection, 
-  createClient, 
-  composeFallback, 
+import {
+  createConnection,
+  toPublicConnection,
+  createClient,
+  composeFallback,
   openaiCodec,
   anthropicCodec
 } from 'nerium';
@@ -56,13 +56,13 @@ const client = createClient({ resilient: conn }, 'resilient');
 ## 2. Tool Loop & Execution Recipe
 
 ```ts
-import { 
-  some, 
-  none, 
-  toModelId, 
-  appendAssistantTurn, 
-  appendToolResults, 
-  type Message, 
+import {
+  some,
+  none,
+  toModelId,
+  appendAssistantTurn,
+  appendToolResults,
+  type Message,
   type NeriumError,
   type ContentBlock
 } from 'nerium';
@@ -139,9 +139,9 @@ for await (const chunk of conn.stream(request)) {
 
 // 2. Or consume the entire stream into a ChatResponse
 import { collectStream } from 'nerium';
-const fullResponse = await collectStream(conn.stream(request), { 
-  provider: 'openai', 
-  model: toModelId('gpt-4o') 
+const fullResponse = await collectStream(conn.stream(request), {
+  provider: 'openai',
+  model: toModelId('gpt-4o')
 });
 ```
 

@@ -1,8 +1,8 @@
 # Nerium
 
-[![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://mozilla.org/MPL/2.0/)
 [![npm version](https://img.shields.io/npm/v/nerium-sdk.svg)](https://www.npmjs.com/package/nerium-sdk)
 [![CI](https://github.com/ElBenjaMasLindo/nerium/actions/workflows/ci.yml/badge.svg)](https://github.com/ElBenjaMasLindo/nerium/actions/workflows/ci.yml)
+[![license](https://img.shields.io/github/license/ElBenjaMasLindo/sadist.svg)](LICENSE)
 
 Nerium is a TypeScript SDK that talks to language models without tying you to a provider, a runtime, or a piece of infrastructure. It runs in Node, Deno, Bun, Workers, edge — anywhere fetch exists. It has zero runtime dependencies. It does not require a gateway, a service, or any companion package.
 
@@ -181,11 +181,10 @@ import {
 
 SemVer. `0.x` allows breaking changes in `MINOR` (additions to discriminated unions count as breaking). Stability is achieved when the surface stops changing, not when the version hits 1.0.
 
-## License
-
-[Mozilla Public License 2.0](https://mozilla.org/MPL/2.0/) — behaves like MIT when you `npm install` and use it as-is: no copyleft obligation on your code. Only applies if you modify nerium's own source files. See [LICENSE](LICENSE) for full terms.
-
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and pull request guidelines.
 
+## License
+
+[MIT](LICENSE) © 2026 ElBenjaMasLindo and contributors
